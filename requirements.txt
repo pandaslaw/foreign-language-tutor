@@ -1,0 +1,10 @@
+loguru
+black
+openai
+pydantic
+pytest
+python-dotenv
+requests
+pyTelegramBotAPI
+python-telegram-bot
+psycopg2
