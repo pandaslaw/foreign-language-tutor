@@ -46,7 +46,7 @@ CREATE TABLE feedback (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE conversation_history (
+CREATE TABLE message_history (
     id SERIAL PRIMARY KEY,
     user_id INT REFERENCES users(id) ON DELETE CASCADE,
     session_id UUID DEFAULT gen_random_uuid(),
