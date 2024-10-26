@@ -1,13 +1,14 @@
 import datetime as dt
+from logging import getLogger
 
-
-from loguru import logger
 from openai import OpenAI
 
 from src.config import app_settings
 
+logger = getLogger(__name__)
 
-def generate_answer(user_input: str, system_prompt: str = None) -> str:
+
+def generate_answer(user_input: str, system_prompt: str = None, chat_history=None) -> str:
     """
     Calls LLM using system prompt and user's text message.
     Language model and system prompt are specified in .env configuration file.
@@ -26,18 +27,16 @@ def generate_answer(user_input: str, system_prompt: str = None) -> str:
 
     start_time = dt.datetime.now()
 
-
     client = OpenAI(
         base_url="https://openrouter.ai/api/v1",
         api_key=app_settings.OPENROUTER_API_KEY,
     )
 
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_input},
-    ]
+    messages = [{"role": "system", "content": system_prompt}]
+    messages.extend(chat_history)
+    messages.append({"role": "user", "content": user_input})
 
-    response = client.chat.completions.create(model=model, messages=messages)
+    response = client.chat.completions.create(model=model, messages=messages)  # max_tokens=300, temperature=0.7
     output = response.choices[0].message.content
 
     usage = response.usage

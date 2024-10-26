@@ -8,3 +8,4 @@ requests
 pyTelegramBotAPI
 python-telegram-bot
 psycopg2
+pyyaml
