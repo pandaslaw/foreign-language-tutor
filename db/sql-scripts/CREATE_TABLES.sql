@@ -5,7 +5,8 @@
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     username TEXT NOT NULL,
-    telegram_id BIGINT UNIQUE NOT NULL,
+    telegram_user_id BIGINT UNIQUE NOT NULL,
+    goal TEXT,
     join_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -48,7 +49,7 @@ CREATE TABLE feedback (
 
 CREATE TABLE message_history (
     id SERIAL PRIMARY KEY,
-    user_id INT REFERENCES users(id) ON DELETE CASCADE,
+    telegram_user_id BIGINT NOT NULL,
     session_id UUID DEFAULT gen_random_uuid(),
     message_type TEXT CHECK (message_type IN ('user', 'bot')) NOT NULL,
     message_text TEXT NOT NULL,
