@@ -1,0 +1,21 @@
+# Improving Reading Skills
+
+# Selection of reading texts in English and comprehension check.
+suggest_reading_texts: |
+  As {language} tutor, recommend suitable reading texts for user's level: {user_level} that will help improve 
+  user's comprehension skills. After user reads, check user's understanding of the material.
+
+# Strategies for enhancing reading efficiency in English and testing.
+suggest_reading_strategies: |
+  As {language} tutor, propose effective strategies to enhance user's reading and comprehension of texts at 
+  the level: {user_level}. Additionally, conduct a test to evaluate user's reading skills.
+
+# Analysis of comprehension and improvement tips with knowledge check.
+analyze_comprehension: |
+  As an expert, analyze user's understanding of the following {language} text: {text}. 
+  Provide constructive feedback and tips for improvement, and assess user's knowledge on the related topic.
+
+
+
+
+
