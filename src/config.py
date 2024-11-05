@@ -31,8 +31,11 @@ class AppSettings(BaseSettings):
     def load_all_prompts(self, dir_path="docs"):
         """Load all prompts from YAML files in the specified directory recursively."""
         root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../"))
+        logger.info(f"Root dir: {root_dir}")
         yaml_files_pattern = os.path.join(root_dir, dir_path, "**", "*.yaml")
+        logger.info(f"yaml_files_pattern: {yaml_files_pattern}")
         yaml_files = glob.glob(yaml_files_pattern, recursive=True)
+        logger.info(f"yaml_files: {yaml_files}")
 
         self.SYSTEM_PROMPTS = {}
 
