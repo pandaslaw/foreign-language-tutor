@@ -1,5 +1,6 @@
 from src.database import get_db_connection, release_db_connection
 
+
 class LessonsRepository:
     """Repository for users table."""
 

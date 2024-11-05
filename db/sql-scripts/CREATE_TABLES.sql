@@ -6,8 +6,14 @@ CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     username TEXT NOT NULL,
     telegram_user_id BIGINT UNIQUE NOT NULL,
-    goal TEXT,
-    join_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    native_language VARCHAR(20) NOT NULL,
+    target_language VARCHAR(20) NOT NULL,
+    current_level VARCHAR(15) NOT NULL,
+    target_level VARCHAR(15),
+    learning_goal TEXT,
+    weekly_hours INT,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
 );
 
 CREATE TABLE lessons (
