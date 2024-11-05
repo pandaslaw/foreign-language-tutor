@@ -74,3 +74,15 @@ app_settings.load_all_prompts()
 
 logger.info(f"CONFIG (LANGUAGE_MODEL): {app_settings.LANGUAGE_MODEL}")
 logger.info(f"CONFIG (SYSTEM_PROMPT): {app_settings.SYSTEM_PROMPT}")
+
+# Scenarios and their corresponding prompts
+SCENARIO_PROMPTS = {
+    "Daily Diary": app_settings.SYSTEM_PROMPTS["daily_diary"]["daily_diary_exercise"],
+    "Grammar": app_settings.SYSTEM_PROMPTS["grammar"]["explain_grammar_rules"],
+    "Plan": app_settings.SYSTEM_PROMPTS["plan"]["create_learning_plan"],
+    "Reading": app_settings.SYSTEM_PROMPTS["reading"]["suggest_reading_texts"],
+    "Vocabulary": app_settings.SYSTEM_PROMPTS["vocabulary"][
+        "suggest_vocabulary_methods"
+    ],
+    "Writing": app_settings.SYSTEM_PROMPTS["writing"]["suggest_writing_exercises"],
+}

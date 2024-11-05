@@ -11,7 +11,7 @@ from telegram.ext import (
     ApplicationBuilder,
 )
 
-from src.config import app_settings
+from src.config import app_settings, SCENARIO_PROMPTS
 from src.dal import MessagesRepository, UsersRepository
 from src.utils import load_history_and_generate_answer
 
@@ -24,18 +24,6 @@ ASK_GOAL = 3
 
 ASK_SCENARIO = 4
 EXECUTE_SCENARIO = 5
-
-# Scenarios and their corresponding prompts
-SCENARIO_PROMPTS = {
-    "Daily Diary": app_settings.SYSTEM_PROMPTS["daily_diary"]["daily_diary_exercise"],
-    "Grammar": app_settings.SYSTEM_PROMPTS["grammar"]["explain_grammar_rules"],
-    "Plan": app_settings.SYSTEM_PROMPTS["plan"]["create_learning_plan"],
-    "Reading": app_settings.SYSTEM_PROMPTS["reading"]["suggest_reading_texts"],
-    "Vocabulary": app_settings.SYSTEM_PROMPTS["vocabulary"][
-        "suggest_vocabulary_methods"
-    ],
-    "Writing": app_settings.SYSTEM_PROMPTS["writing"]["suggest_writing_exercises"],
-}
 
 
 # @bot.message_handler(commands=["daily_phrase"])
