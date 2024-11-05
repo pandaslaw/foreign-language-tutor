@@ -1,6 +1,7 @@
 import glob
 import os
 from logging import getLogger
+from pathlib import Path
 from typing import Dict
 
 import yaml
@@ -43,11 +44,8 @@ class AppSettings(BaseSettings):
 
             with open(yaml_file, "r", encoding="utf-8") as file:
                 prompts = yaml.safe_load(file)
-                prompt_category = (
-                    file.name.split("\\")[-1]
-                    .replace(".yaml", "")
-                    .replace("prompts_", "")
-                )
+                file_path = Path(file.name)
+                prompt_category = file_path.stem.replace("prompts_", "")
                 self.SYSTEM_PROMPTS[prompt_category] = {}
 
                 if isinstance(prompts, dict):
