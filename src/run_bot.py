@@ -130,15 +130,16 @@ async def ask_goal(update: Update, context: CallbackContext) -> int:
     UsersRepository.create_user(name, user_id, **context.user_data)
 
     await update.message.reply_text("Thanks! Your preferences have been saved.")
+
+    await update.message.reply_text(
+        "Welcome to your language learning session! From where would you like to start today?",
+        reply_markup=ReplyKeyboardMarkup([list(SCENARIO_PROMPTS.keys())], one_time_keyboard=True)
+    )
     return ASK_SCENARIO
 
 
 async def ask_scenario(update: Update, context: CallbackContext) -> int:
     """Function to handle user's scenario choice"""
-    # await update.message.reply_text(
-    #     "Welcome to your language learning session! From where would you like to start today?",
-    #     reply_markup=ReplyKeyboardMarkup([list(SCENARIO_PROMPTS.keys())], one_time_keyboard=True)
-    # )
     tg_id = update.message.from_user.id
     scenario = update.message.text
     context.user_data["current_scenario"] = (
