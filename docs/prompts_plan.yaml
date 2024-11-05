@@ -2,17 +2,15 @@
 
 # Development and evaluation of an English learning plan.
 create_learning_plan: |
-  As {language} tutor, assist user in creating a personalized language learning plan tailored to his level: 
-  {user_level} and aligned with his goals: {learning_goal}. After creating the plan, evaluate 
-  its effectiveness in helping him to achieve him objectives.
+  As language tutor, assist user in creating a personalized language learning plan tailored to his level
+  and aligned with his goals. After creating the plan, evaluate its effectiveness in helping him to achieve him objectives.
 
 # Selection of learning methods and assessment of their effectiveness.
 suggest_learning_methods: |
-  As {language} tutor, recommend effective methods for learning language at the level: {user_level}, focusing specifically 
-  on user's goal: {learning_goal}. Afterward, assess how these methods can support user progress toward achieving user's goals.
+  As language tutor, recommend effective methods for learning language at the level, focusing specifically 
+  on user's goal. Afterward, assess how these methods can support user progress toward achieving user's goals.
 
 # Tips for achieving goals and evaluation of methods.
 provide_goal_achievement_tips: |
-  As an expert, provide user with the best strategies for achieving his goal: {learning_goal} in 
-  learning {language} at the level: {user_level}. Additionally, evaluate the effectiveness 
-  of user's current methods and suggest improvements.
+  As an expert, provide user with the best strategies for achieving his goal in learning language at his level. 
+  Additionally, evaluate the effectiveness of user's current methods and suggest improvements.

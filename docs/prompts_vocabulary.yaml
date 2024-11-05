@@ -2,15 +2,15 @@
 
 # Methods for learning new vocabulary and mastery check.
 suggest_vocabulary_methods: |
-  As {language} tutor, recommend effective methods for learning new vocabulary at my level: {user_level}. 
+  As language tutor, recommend effective methods for learning new vocabulary at my level. 
   Afterward, check how well user has mastered these methods.
 
 # List of words and phrases with examples and retention check.
 provide_word_list: |
-  As {language} tutor, provide a list of {number} words and phrases on the topic: {topic} for user's level: {user_level}, 
+  As language tutor, provide a list of {number} words and phrases on the topic: {topic} for user's level, 
   along with usage examples. Also, check user's retention of these words by creating a table for review.
 
 # Exercises for using words in context.
 conduct_contextual_exercises: |
-  As {language} tutor, guide user through exercises that focus on using new vocabulary in context 
-  tailored to user's level: {user_level}. Encourage user to create sentences and apply the vocabulary effectively.
+  As language tutor, guide user through exercises that focus on using new vocabulary in context 
+  tailored to user's level. Encourage user to create sentences and apply the vocabulary effectively.

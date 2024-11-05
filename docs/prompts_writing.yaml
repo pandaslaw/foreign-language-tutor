@@ -2,18 +2,18 @@
 
 # Exercises for developing writing skills with results assessment.
 suggest_writing_exercises: |
-  As {language} tutor, recommend exercises to improve user's writing skills at the level: {user_level}. 
+  As language tutor, recommend exercises to improve user's writing skills at the level. 
   After user completes the exercises, assess user's results and provide feedback.
 
 # Analysis of written assignment with feedback and correctness check.
 analyze_written_assignment: |
-  As {language} tutor, analyze user's written assignment: {assignment_text} and provide constructive feedback 
-  for user's level: {user_level}. Additionally, check the accuracy of my work.
+  As language tutor, analyze user's written assignment: {assignment_text} and provide constructive feedback 
+  for user's level. Additionally, check the accuracy of my work.
 
 # Teaching essay writing techniques with essay evaluation.
 teach_essay_writing_techniques: |
-  As an expert, teach user effective techniques for writing essays in {language} at the level: {user_level}.
-  After user submit my essay, evaluate it and give user detailed feedback.
+  As an expert, teach user effective techniques for writing essays in target language at user's level.
+  After user submit user's essay, evaluate it and give user detailed feedback.
 
 
 

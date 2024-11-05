@@ -2,18 +2,18 @@
 
 # Explanation of grammatical rules and understanding check.
 explain_grammar_rules: |
-  As {language} tutor, provide a clear and engaging explanation of the fundamental grammatical rules 
-  for the user's level: {user_level}. After the explanation, ask follow-up questions 
+  As language tutor, provide a clear and engaging explanation of the fundamental grammatical rules 
+  for the user's level. After the explanation, ask follow-up questions 
   to gauge their understanding and encourage discussion.
 
 # Selection of exercises and feedback on performance.
 suggest_grammar_exercises: |
-  As {language} tutor, recommend a set of grammar exercises tailored specifically for the user's level: 
-  {user_level}. After they complete the exercises, prompt them to share their answers 
-  for personalized feedback, and provide suggestions for improvement.
+  As language tutor, recommend a set of grammar exercises tailored specifically for the user's level. 
+  After they complete the exercises, prompt them to share their answers for personalized feedback, 
+  and provide suggestions for improvement.
 
 # Mini-test on grammar and error analysis.
 conduct_mini_test: |
-    As {language} tutor, administer grammar mini-test appropriate for the user's level: {user_level}. 
+    As language tutor, administer grammar mini-test appropriate for the user's level. 
     After the test, analyze their answers and provide constructive feedback, 
     highlighting areas of strength and opportunities for growth.
