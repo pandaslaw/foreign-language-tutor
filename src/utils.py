@@ -19,13 +19,15 @@ def load_history_and_generate_answer(
     Loads message history from DB, prepares the system prompt by enriching it with full message history
     or summarized message history and calls LLM.
     """
+    if not user_input and not assistant_prompt:
+        logger.info("User input and assistant prompt are empty. SKIPPING")
+        return ""
 
     messages_history = MessagesRepository.get_recent_messages(user_id)
-    messages_history_without_last_message = messages_history[:-1]
 
     user_data = UsersRepository.get_user_by_id(user_id)
     system_prompt_updated = update_system_prompt(
-        messages_history_without_last_message, app_settings.SYSTEM_PROMPT, user_data
+        messages_history, app_settings.SYSTEM_PROMPT, user_data
     )
 
     output = generate_answer(user_input, system_prompt_updated, assistant_prompt)

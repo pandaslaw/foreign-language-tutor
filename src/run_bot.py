@@ -148,10 +148,11 @@ async def ask_scenario(update: Update, context: CallbackContext) -> int:
 
     # Call the LLM for the first prompt in the selected scenario
     llm_response = load_history_and_generate_answer(tg_id, SCENARIO_PROMPTS[scenario])
-    await update.message.reply_text(llm_response)
+    if llm_response:
+        await update.message.reply_text(llm_response)
 
-    MessagesRepository.save_message(tg_id, scenario)
-    MessagesRepository.save_message(tg_id, llm_response, is_llm=True)
+        MessagesRepository.save_message(tg_id, scenario)
+        MessagesRepository.save_message(tg_id, llm_response, is_llm=True)
 
     # Continue in the scenario
     return EXECUTE_SCENARIO

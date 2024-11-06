@@ -86,4 +86,5 @@ SCENARIO_PROMPTS = {
         "suggest_vocabulary_methods"
     ],
     "Writing": app_settings.SYSTEM_PROMPTS["writing"]["suggest_writing_exercises"],
+    "General Conversation": "",
 }
