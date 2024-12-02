@@ -22,8 +22,8 @@ class AppSettings(BaseSettings):
 
     LANGUAGE_MODEL: str
 
-    SYSTEM_PROMPT: str = None
-    SYSTEM_PROMPTS: Dict[str, Dict[str, str]] = None
+    SYSTEM_PROMPT: str = ""
+    SYSTEM_PROMPTS: Dict[str, Dict[str, str]] = {}
 
     TELEGRAM_BOT_TOKEN: str
 
