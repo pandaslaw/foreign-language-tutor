@@ -59,7 +59,7 @@ def setup_logging():
                         "console_handler",
                     ],
                 },
-                "pyrogram": {  # Suppress Pyrogram logs by setting to WARNING
+                "httpx": {
                     "level": "WARNING",
                     "handlers": [
                         "console_handler"

@@ -2,6 +2,7 @@ import datetime as dt
 from logging import getLogger
 from typing import List, Union, Dict
 
+import whisper
 from openai import OpenAI
 
 from src.config import app_settings
@@ -153,3 +154,9 @@ def generate_answer(
     logger.info(f"LLM's output: {output}")
 
     return output
+
+
+def transcribe_audio(file_path):
+    model = whisper.load_model("base")  # models: base, small, medium, large)
+    result = model.transcribe(file_path)  #  language="en"
+    return result["text"]

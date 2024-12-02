@@ -6,7 +6,7 @@ from typing import Dict
 
 import yaml
 from dotenv import load_dotenv
-from pydantic.v1 import BaseSettings
+from pydantic import BaseSettings
 
 from src.logging_config import setup_logging
 
@@ -41,7 +41,6 @@ class AppSettings(BaseSettings):
         self.SYSTEM_PROMPTS = {}
 
         for yaml_file in yaml_files:
-
             with open(yaml_file, "r", encoding="utf-8") as file:
                 prompts = yaml.safe_load(file)
                 file_path = Path(file.name)

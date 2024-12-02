@@ -9,3 +9,7 @@ pyTelegramBotAPI
 python-telegram-bot
 psycopg2
 pyyaml
+whisper
+gtts
+pyttsx3
+TTS

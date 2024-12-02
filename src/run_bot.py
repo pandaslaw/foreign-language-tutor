@@ -13,7 +13,7 @@ from telegram.ext import (
 
 from src.config import app_settings, SCENARIO_PROMPTS
 from src.dal import MessagesRepository, UsersRepository
-from src.utils import load_history_and_generate_answer
+from src.utils import load_history_and_generate_answer, transcribe_audio
 
 logger = getLogger(__name__)
 
@@ -73,6 +73,7 @@ EXECUTE_SCENARIO = 5
 
 
 async def start(update: Update, context: CallbackContext) -> int:
+    logger.info(f"/start command was executed. Greeting the user.")
     if UsersRepository.get_user_by_id(update.message.from_user.id):
         await update.message.reply_text(
             "Welcome to your language learning session! From where would you like to start today?",
@@ -133,7 +134,9 @@ async def ask_goal(update: Update, context: CallbackContext) -> int:
 
     await update.message.reply_text(
         "Welcome to your language learning session! From where would you like to start today?",
-        reply_markup=ReplyKeyboardMarkup([list(SCENARIO_PROMPTS.keys())], one_time_keyboard=True)
+        reply_markup=ReplyKeyboardMarkup(
+            [list(SCENARIO_PROMPTS.keys())], one_time_keyboard=True
+        ),
     )
     return ASK_SCENARIO
 
@@ -142,46 +145,54 @@ async def ask_scenario(update: Update, context: CallbackContext) -> int:
     """Function to handle user's scenario choice"""
     tg_id = update.message.from_user.id
     scenario = update.message.text
-    context.user_data["current_scenario"] = (
-        scenario  # Store selected scenario in user data
-    )
 
-    # Call the LLM for the first prompt in the selected scenario
+    logger.info(f"Set current scenario to '{scenario}'.")
+    context.user_data[
+        "current_scenario"
+    ] = scenario  # Store selected scenario in user data
+
+    logger.info(f"Call LLM for the first prompt in the selected scenario")
     llm_response = load_history_and_generate_answer(tg_id, SCENARIO_PROMPTS[scenario])
+
     if llm_response:
         await update.message.reply_text(llm_response)
 
-        MessagesRepository.save_message(tg_id, scenario)
-        MessagesRepository.save_message(tg_id, llm_response, is_llm=True)
+        logger.info(f"Saving user input and llm's response.")
+        MessagesRepository.save_message(
+            tg_id, f"[Scenario: {scenario}]" + llm_response, is_llm=True
+        )
 
     # Continue in the scenario
     return EXECUTE_SCENARIO
 
 
-async def execute_scenario(update: Update, context: CallbackContext) -> int:
-    """Function to continue scenario execution until the user opts to stop or switch"""
-    tg_id = update.message.from_user.id
-    user_input = update.message.text.lower()
-
-    if user_input in ["stop", "switch"]:
-        await update.message.reply_text(
-            "Would you like to continue with another scenario?",
-            reply_markup=ReplyKeyboardMarkup(
-                [list(SCENARIO_PROMPTS.keys())], one_time_keyboard=True
-            ),
-        )
-        return ASK_SCENARIO  # Go back to ask scenario
-
-    current_scenario = context.user_data["current_scenario"]
-    llm_response = load_history_and_generate_answer(
-        tg_id, user_input, SCENARIO_PROMPTS[current_scenario]
-    )
-    await update.message.reply_text(llm_response)
-
-    MessagesRepository.save_message(tg_id, user_input)
-    MessagesRepository.save_message(tg_id, llm_response, is_llm=True)
-
-    return EXECUTE_SCENARIO
+# async def execute_scenario(update: Update, context: CallbackContext) -> int:
+#     """Function to continue scenario execution until the user opts to stop or switch"""
+#     tg_id = update.message.from_user.id
+#     user_input = update.message.text.lower()
+#
+#     if user_input in ["stop", "switch"]:
+#         await update.message.reply_text(
+#             "Would you like to continue with another scenario?",
+#             reply_markup=ReplyKeyboardMarkup(
+#                 [list(SCENARIO_PROMPTS.keys())], one_time_keyboard=True
+#             ),
+#         )
+#         return ASK_SCENARIO  # Go back to ask scenario
+#
+#     current_scenario = context.user_data["current_scenario"]
+#     logger.info(f"Current scenario is '{current_scenario}'.")
+#
+#     llm_response = load_history_and_generate_answer(
+#         tg_id, user_input, SCENARIO_PROMPTS[current_scenario]
+#     )
+#     await update.message.reply_text(llm_response)
+#
+#     logger.info(f"Saving user input and llm's response.")
+#     MessagesRepository.save_message(tg_id, user_input)
+#     MessagesRepository.save_message(tg_id, f"[Scenario: {current_scenario}]"+llm_response, is_llm=True)
+#
+#     return EXECUTE_SCENARIO
 
 
 async def cancel(update: Update, context: CallbackContext) -> int:
@@ -192,32 +203,97 @@ async def cancel(update: Update, context: CallbackContext) -> int:
     return ConversationHandler.END
 
 
-conversation_handler = ConversationHandler(
-    entry_points=[CommandHandler("start", start)],
-    states={
-        ASK_NATIVE_LANGUAGE: [
-            MessageHandler(filters.TEXT & ~filters.COMMAND, ask_native_language)
-        ],
-        ASK_TARGET_LANGUAGE: [
-            MessageHandler(filters.TEXT & ~filters.COMMAND, ask_target_language)
-        ],
-        ASK_CURRENT_LEVEL: [
-            MessageHandler(filters.TEXT & ~filters.COMMAND, ask_current_level)
-        ],
-        ASK_GOAL: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_goal)],
-        ASK_SCENARIO: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_scenario)],
-        EXECUTE_SCENARIO: [
-            MessageHandler(filters.TEXT & ~filters.COMMAND, execute_scenario)
-        ],
-    },
-    fallbacks=[CommandHandler("cancel", cancel)],
-)
+async def handle_text_message(
+    update: Update, context: CallbackContext, transcribed_text: str = None
+):
+    logger.info(f"Start processing user's text.")
+    tg_id = update.message.from_user.id
+    user_input = update.message.text
 
-# Create the application and add the conversation handler
-app = ApplicationBuilder().token(app_settings.TELEGRAM_BOT_TOKEN).build()
+    if not user_input and update.message.voice:
+        user_input = transcribed_text
 
-app.add_handler(conversation_handler)
+    if user_input in SCENARIO_PROMPTS:
+        context.user_data["current_scenario"] = user_input
+
+    current_scenario = get_current_scenario(context.user_data)
+
+    llm_response = load_history_and_generate_answer(
+        tg_id, user_input, SCENARIO_PROMPTS[current_scenario]
+    )
+    await update.message.reply_text(llm_response)
+
+    logger.info(f"Saving user input and llm's response.")
+    MessagesRepository.save_message(tg_id, user_input)
+    MessagesRepository.save_message(
+        tg_id, f"[Scenario: {current_scenario}]" + llm_response, is_llm=True
+    )
+
+    return
+
+
+async def handle_voice(update: Update, context: CallbackContext):
+    tg_id = update.message.from_user.id
+    logger.info(f"Starting to process voice message for user '{tg_id}'.")
+    voice = update.message.voice
+    file_id = voice.file_id
+
+    file = await context.bot.get_file(file_id)
+    await file.download_to_drive("voice_message.ogg")
+
+    await update.message.reply_text("Вижу твое голосовое, сейчас послушаю")
+
+    transcribed_text = transcribe_audio("voice_message.ogg")
+    await update.message.reply_text("> " + transcribed_text)
+
+    logger.info(f"Saving transcribed text: '{transcribed_text}'.")
+    current_scenario = get_current_scenario(context.user_data)
+    MessagesRepository.save_message(
+        tg_id, f"[Scenario: {current_scenario}]" + transcribed_text
+    )
+
+    await handle_text_message(update, context, transcribed_text)
+
+
+def get_current_scenario(user_data):
+    if not user_data.get("current_scenario"):
+        user_data["current_scenario"] = "General Conversation"
+    current_scenario = user_data["current_scenario"]
+    logger.info(f"Current scenario is '{current_scenario}'.")
+    return current_scenario
+
 
 if __name__ == "__main__":
+    # Create the application and add the conversation handler
+    app = ApplicationBuilder().token(app_settings.TELEGRAM_BOT_TOKEN).build()
+
+    conversation_handler = ConversationHandler(
+        entry_points=[CommandHandler("start", start)],
+        states={
+            ASK_NATIVE_LANGUAGE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, ask_native_language)
+            ],
+            ASK_TARGET_LANGUAGE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, ask_target_language)
+            ],
+            ASK_CURRENT_LEVEL: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, ask_current_level)
+            ],
+            ASK_GOAL: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_goal)],
+            ASK_SCENARIO: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, ask_scenario)
+            ],
+            # EXECUTE_SCENARIO: [
+            #     MessageHandler(filters.TEXT & ~filters.COMMAND, execute_scenario)
+            # ],
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
+    )
+
+    app.add_handler(conversation_handler)
+    app.add_handler(
+        MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message)
+    )
+    app.add_handler(MessageHandler(filters.VOICE, handle_voice))
     logger.info("~~~Send any message to a bot to start chatting~~~")
     app.run_polling()
