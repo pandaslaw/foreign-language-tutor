@@ -13,3 +13,4 @@ whisper
 gtts
 pyttsx3
 gTTS
+pydantic-settings
