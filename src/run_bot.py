@@ -8,7 +8,7 @@ from telegram.ext import (
     filters,
     ConversationHandler,
     CallbackContext,
-    ApplicationBuilder,
+    ApplicationBuilder, ContextTypes,
 )
 
 from src.config import app_settings, SCENARIO_PROMPTS
@@ -204,7 +204,7 @@ async def cancel(update: Update, context: CallbackContext) -> int:
 
 
 async def handle_text_message(
-    update: Update, context: CallbackContext, transcribed_text: str = None
+        update: Update, context: CallbackContext, transcribed_text: str = None
 ):
     logger.info(f"Start processing user's text.")
     tg_id = update.message.from_user.id
@@ -263,6 +263,20 @@ def get_current_scenario(user_data):
     return current_scenario
 
 
+async def health_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
+    if user_id in app_settings.ADMIN_USER_IDS:
+        await context.bot.send_message(chat_id=user_id, text="Bot is live and running!")
+        logger.info(
+            f"User {user_id} checked bot's status via /health command. Bot is live and running!"
+        )
+    else:
+        logger.warning(
+            f"You are not an admin user and not authorized "
+            f"to perform /health command. User id: {user_id}."
+        )
+
+
 if __name__ == "__main__":
     # Create the application and add the conversation handler
     app = ApplicationBuilder().token(app_settings.TELEGRAM_BOT_TOKEN).build()
@@ -291,9 +305,12 @@ if __name__ == "__main__":
     )
 
     app.add_handler(conversation_handler)
+    app.add_handler(CommandHandler("health", health_check))
+
     app.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message)
     )
     app.add_handler(MessageHandler(filters.VOICE, handle_voice))
+
     logger.info("~~~Send any message to a bot to start chatting~~~")
     app.run_polling()

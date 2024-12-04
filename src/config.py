@@ -2,7 +2,7 @@ import glob
 import os
 from logging import getLogger
 from pathlib import Path
-from typing import Dict
+from typing import Dict, List
 
 import yaml
 from dotenv import load_dotenv
@@ -28,6 +28,8 @@ class AppSettings(BaseSettings):
     TELEGRAM_BOT_TOKEN: str
 
     DB_CONNECTION_STRING: str
+
+    ADMIN_USER_IDS: List[int] = []
 
     def load_all_prompts(self, dir_path="docs"):
         """Load all prompts from YAML files in the specified directory recursively."""
