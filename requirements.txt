@@ -1,4 +1,3 @@
-loguru
 black
 openai
 pydantic
@@ -9,8 +8,4 @@ pyTelegramBotAPI
 python-telegram-bot
 psycopg2
 pyyaml
-git+https://github.com/openai/whisper.git
-gtts
-pyttsx3
-gTTS
 pydantic-settings
