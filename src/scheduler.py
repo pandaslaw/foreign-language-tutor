@@ -62,6 +62,13 @@ class LearningScheduler:
             id=f'weekly_progress_{user_id}'
         )
 
+    def format_vocabulary(self, vocab_dict: dict) -> str:
+        """Format vocabulary in a Telegram-friendly way"""
+        result = "\n📚 _New Words:_\n"
+        for word, meaning in vocab_dict.items():
+            result += f"• `{word}` - {meaning}\n"
+        return result
+
     def send_practice_message(self, user_id: int, session_type: str):
         tracker = self.get_progress_tracker(user_id)
         
@@ -83,15 +90,15 @@ class LearningScheduler:
         prompt = random.choice(prompts[category])
         
         # Format message with cultural fact
-        message = f"{prompt}\n\n🎯 Cultural Note: {cultural_fact['fact']}\n"
+        message = f"{prompt}\n\n🎯 _Cultural Note:_ {cultural_fact['fact']}"
+        
+        # Add vocabulary if present
         if 'vocabulary' in cultural_fact:
-            message += "\n📚 New Words:\n"
-            for word, meaning in cultural_fact['vocabulary'].items():
-                message += f"• {word}: {meaning}\n"
+            message += self.format_vocabulary(cultural_fact['vocabulary'])
         
         # Add progress information
         if random.random() < 0.3:  # 30% chance to show progress
-            message += f"\n{tracker.get_progress_summary()}"
+            message += f"\n\n{tracker.get_progress_summary()}"
         
         # Send message through bot
         self.bot.send_message(

@@ -57,24 +57,24 @@ class ProgressTracker:
     def get_progress_summary(self) -> str:
         """Generate a motivational progress summary"""
         total_words = sum(self.progress['words_learned'].values())
-        return f"""🌟 Your Learning Journey 🌟
+        return f"""🌟 *Your Learning Journey* 🌟
 
-📚 Words Mastered: {total_words} words
-   • Nouns: {self.progress['words_learned']['nouns']}
-   • Verbs: {self.progress['words_learned']['verbs']}
-   • Adjectives: {self.progress['words_learned']['adjectives']}
+📚 _Words Mastered:_ {total_words} words
+• Nouns: {self.progress['words_learned']['nouns']}
+• Verbs: {self.progress['words_learned']['verbs']}
+• Adjectives: {self.progress['words_learned']['adjectives']}
 
-🔥 Daily Streak: {self.progress['daily_streaks']} days
-🎯 Today's Progress: {sum(self.progress['daily_goals'].values())}/3 sessions
+🔥 _Daily Streak:_ {self.progress['daily_streaks']} days
+🎯 _Today's Progress:_ {sum(self.progress['daily_goals'].values())}/3 sessions
 
-Keep going! Her gün bir adım daha! (One more step each day!)"""
+_Keep going! `Her gün bir adım daha!` (One more step each day!)_"""
 
     def get_weekly_report(self) -> str:
         """Generate a weekly progress report"""
-        return f"""📊 Weekly Progress Report 📊
+        return f"""📊 *Weekly Progress Report* 📊
 
-🎯 Sessions Completed: {self.progress['weekly_stats']['sessions_completed']}
-📚 New Words Learned: {self.progress['weekly_stats']['new_words_learned']}
-🏺 Cultural Facts Discovered: {self.progress['weekly_stats']['cultural_facts']}
+🎯 _Sessions Completed:_ {self.progress['weekly_stats']['sessions_completed']}
+📚 _New Words Learned:_ {self.progress['weekly_stats']['new_words_learned']}
+🏺 _Cultural Facts Discovered:_ {self.progress['weekly_stats']['cultural_facts']}
 
-Harika ilerleme! (Wonderful progress!)"""
+_`Harika ilerleme!` (Wonderful progress!)_"""

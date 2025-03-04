@@ -1,6 +1,7 @@
 import datetime as dt
 from logging import getLogger
 from typing import List, Union, Dict
+import re
 
 # import whisper
 from openai import OpenAI
@@ -9,6 +10,21 @@ from src.config import app_settings
 from src.dal import MessagesRepository, UsersRepository
 
 logger = getLogger(__name__)
+
+
+def clean_llm_response(text: str) -> str:
+    """Remove problematic markdown formatting from LLM responses."""
+    # Remove markdown headers (e.g., #### Title)
+    text = re.sub(r'^#{1,6}\s+(.+?)$', r'\1', text, flags=re.MULTILINE)
+    # Remove double asterisks (bold)
+    text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
+    # Remove single asterisks (italic)
+    text = re.sub(r'\*([^*]+?)\*', r'\1', text)
+    # Remove triple backticks (code blocks)
+    text = re.sub(r'```[^\n]*\n(.+?)```', r'\1', text, flags=re.DOTALL)
+    # Remove single backticks (inline code)
+    text = re.sub(r'`([^`]+?)`', r'\1', text)
+    return text
 
 
 def load_history_and_generate_answer(
@@ -114,7 +130,13 @@ def generate_answer(
         f"Just in case someone asks you about what day is it today, "
         f"you know that current time is {start_time} and you answer the name "
         f"of a day of a week initially and say full date only "
-        f"if you are explicitly asked to do this.\n\n" + system_prompt
+        f"if you are explicitly asked to do this.\n\n"
+        f"IMPORTANT: Do not use any markdown formatting in your responses. "
+        f"Specifically:\n"
+        f"- Do not use asterisks (*) or backticks (`) for emphasis\n"
+        f"- Do not use hashtags (#) for headers\n"
+        f"- Do not use any other special formatting characters\n"
+        f"Just write plain text.\n\n" + system_prompt
     )
 
     if assistant_prompt:
@@ -141,6 +163,9 @@ def generate_answer(
 
     response = client.chat.completions.create(model=model, messages=messages)
     output = response.choices[0].message.content
+    
+    # Clean any markdown formatting from the response
+    output = clean_llm_response(output)
 
     usage = response.usage
     logger.info(
