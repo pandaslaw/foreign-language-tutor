@@ -1,0 +1,109 @@
+daily_situations:
+  - context: "At the grocery store"
+    prompts:
+      - "Imagine we're at the grocery store. I'll be the shopkeeper. Try asking me where to find some basic items like bread, milk, or vegetables."
+      - "Let's practice asking about prices. How would you ask 'How much is this?'"
+      - "Time to check out! Let's practice the dialogue for paying."
+
+  - context: "Asking for directions"
+    prompts:
+      - "You're looking for the nearest pharmacy. Let's practice asking for directions!"
+      - "Someone asks you where the bus stop is. How would you respond?"
+      - "Practice explaining the route to your home from a major landmark."
+
+  - context: "Daily communication with partner"
+    prompts:
+      - "Let's practice expressing basic needs: 'I'm hungry', 'I'm tired', 'I need help'"
+      - "How would you ask your partner about their day?"
+      - "Practice making simple plans: 'Shall we go to the park?', 'What would you like for dinner?'"
+
+conversation_starters:
+  - "Tell me about your neighborhood in Turkey. What places do you visit often?"
+  - "What's your favorite Turkish food? Let's practice ordering it!"
+  - "What's the weather like today? Let's learn weather-related vocabulary."
+
+grammar_integration:
+  - pattern: "When using {word}, remember this structure: {pattern}"
+  - example: "Here's how we can use this in daily life: {example}"
+  - practice: "Now you try making a sentence with {word}!"
+
+motivation_messages:
+  - "Harika! (Wonderful!) You're making great progress with your Turkish!"
+  - "Don't worry about mistakes - they're how we learn. Let's try again!"
+  - "You're getting better every day. Remember, small steps lead to big progress!"
+  - "That was perfect for your A1 level! Ready to learn something new?"
+
+review_prompts:
+  - "Remember yesterday we learned {word}? Let's use it in a new sentence!"
+  - "Can you recall how to ask for {situation}? Let's practice again!"
+  - "Let's review the phrases we learned about {topic}. Which ones do you remember?"
+
+morning_session:
+  inspiration:
+    - "Günaydın güzel hanım! (Good morning beautiful lady!) How did you sleep? Let's start our day with positive energy!"
+    - "The morning sun is so energizing! Let's practice describing this beautiful morning in Turkish."
+    - "Time for our morning self-care routine! Let's learn words for beauty and wellness."
+  
+  wellness:
+    - "What's your morning exercise plan today? Let's learn some movement vocabulary!"
+    - "Shall we practice yoga terms in Turkish? Let's start with basic positions."
+    - "Time for a healthy breakfast! What would you like to prepare?"
+  
+  affirmations:
+    - "Let's practice positive affirmations in Turkish: 'Ben güçlüyüm' (I am strong)"
+    - "Today will be wonderful! How do we say 'I feel amazing' in Turkish?"
+    - "You're making progress every day! Let's celebrate with a new phrase."
+
+midday_session:
+  cooking:
+    - "What's cooking? Let's learn kitchen vocabulary while you prepare lunch!"
+    - "Time to explore Turkish recipes! Would you like to learn about 'mercimek çorbası'?"
+    - "Let's practice ordering your favorite Turkish dishes at a restaurant."
+  
+  shopping:
+    - "Shopping time! Let's learn how to ask for sizes and colors."
+    - "At the market: Let's practice bargaining in Turkish!"
+    - "Need anything from the bakkal (local shop)? Let's make a shopping list in Turkish."
+  
+  daily_life:
+    - "Time to practice some useful phrases for your daily errands."
+    - "Let's learn how to chat with your neighbors about the weather."
+    - "Practice time: How would you ask for help at the post office?"
+
+evening_session:
+  reflection:
+    - "Let's have a warm chat about your day. What made you smile today?"
+    - "Time for our evening reflection. What new Turkish words did you use today?"
+    - "Share three beautiful moments from your day - let's describe them in Turkish."
+  
+  relaxation:
+    - "Evening is for peaceful conversations. Let's practice calm, soothing phrases."
+    - "What helps you relax? Let's learn words for your evening routine."
+    - "Time for some light reading in Turkish. Shall we try a simple story?"
+  
+  connection:
+    - "Let's practice expressing feelings and emotions in Turkish."
+    - "Time to write a short gratitude note in Turkish."
+    - "What are your hopes for tomorrow? Let's express them in simple Turkish."
+
+cultural_integration:
+  meal_customs:
+    - "Did you know? {meal_fact}"
+    - "Turkish breakfast tip: {breakfast_custom}"
+    - "Dinner etiquette: {dinner_custom}"
+  
+  traditions:
+    - "Today's cultural note: {daily_tradition}"
+    - "Islamic wisdom: {islamic_fact}"
+    - "Turkish holiday coming up: {holiday_fact}"
+  
+  lifestyle:
+    - "Modern Turkish life: {modern_fact}"
+    - "Traditional custom: {traditional_fact}"
+    - "Local lifestyle tip: {lifestyle_tip}"
+
+progress_celebration:
+  - " Wonderful progress! You've learned {words_count} new words this week!"
+  - "Your Turkish is getting better every day! Let's review what you've learned."
+  - "You're on a {streak_count} day streak! Keep the momentum going!"
+  - "You've mastered {topic_count} daily life topics. Ready for more?"
