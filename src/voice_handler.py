@@ -7,8 +7,8 @@ import logging
 from pathlib import Path
 import gc
 
-import whisper
-from gtts import gTTS
+# import whisper
+# from gtts import gTTS
 from telegram import Update
 from telegram.ext import CallbackContext
 
@@ -23,7 +23,7 @@ def init_whisper_model():
     global MODEL
     if MODEL is None:
         logger.info("Initializing Whisper model...")
-        MODEL = whisper.load_model("tiny")  # Only ~150MB
+        # MODEL = whisper.load_model("tiny")  # Only ~150MB
         logger.info("Whisper model initialized")
 
 
@@ -57,8 +57,20 @@ class VoiceHandler:
         self.temp_dir = os.path.join(
             temp_dir or tempfile.gettempdir(), "foreign_language_tutor"
         )
-        os.makedirs(self.temp_dir, exist_ok=True)
-        logger.info(f"Using temporary directory: {self.temp_dir}")
+        try:
+            # Create directory with full permissions if it doesn't exist
+            if not os.path.exists(self.temp_dir):
+                os.makedirs(self.temp_dir, mode=0o777, exist_ok=True)
+            else:
+                # Ensure directory has proper permissions
+                os.chmod(self.temp_dir, 0o777)
+            logger.info(f"Using temporary directory: {self.temp_dir}")
+        except Exception as e:
+            logger.error(f"Error creating/accessing temp directory: {e}")
+            # Fallback to a directory in the current working directory
+            self.temp_dir = os.path.join(os.getcwd(), "temp", "foreign_language_tutor")
+            os.makedirs(self.temp_dir, mode=0o777, exist_ok=True)
+            logger.info(f"Using fallback temporary directory: {self.temp_dir}")
 
         # Clean any leftover files from previous runs
         self._cleanup_temp_dir()
@@ -72,13 +84,18 @@ class VoiceHandler:
             current_time = time.time()
             for file in os.listdir(self.temp_dir):
                 file_path = os.path.join(self.temp_dir, file)
-                # Remove files older than 1 hour
-                if os.path.getctime(file_path) < current_time - 3600:
-                    try:
-                        os.remove(file_path)
-                        logger.debug(f"Cleaned up old file: {file_path}")
-                    except Exception as e:
-                        logger.error(f"Error cleaning up old file {file_path}: {e}")
+                try:
+                    # Remove files older than 1 hour
+                    if os.path.getctime(file_path) < current_time - 3600:
+                        try:
+                            os.remove(file_path)
+                            logger.debug(f"Cleaned up old file: {file_path}")
+                        except PermissionError:
+                            logger.warning(f"Permission denied when cleaning up {file_path}")
+                        except Exception as e:
+                            logger.error(f"Error cleaning up old file {file_path}: {e}")
+                except OSError as e:
+                    logger.error(f"Error accessing file {file_path}: {e}")
         except Exception as e:
             logger.error(f"Error cleaning temp directory: {e}")
 
@@ -96,15 +113,26 @@ class VoiceHandler:
             voice = update.message.voice
             file = await context.bot.get_file(voice.file_id)
 
-            # Ensure unique filename
+            # Ensure unique filename with microsecond precision
+            timestamp = update.message.date.timestamp()
+            microsecond = int(time.time() * 1000000) % 1000000
             voice_path = os.path.join(
                 self.temp_dir,
-                f"voice_{voice.file_id}_{update.message.date.timestamp()}.ogg",
+                f"voice_{voice.file_id}_{timestamp}_{microsecond}.ogg",
             )
             temp_files.append(voice_path)
 
+            # Ensure parent directory exists with proper permissions
+            os.makedirs(os.path.dirname(voice_path), mode=0o777, exist_ok=True)
+
             logger.info(f"Downloading voice message to {voice_path}")
-            await file.download_to_drive(voice_path)
+            try:
+                await file.download_to_drive(voice_path)
+                # Set file permissions
+                os.chmod(voice_path, 0o666)
+            except Exception as e:
+                logger.error(f"Error downloading voice file: {e}")
+                raise
 
             if not os.path.exists(voice_path):
                 raise FileNotFoundError(

@@ -13,5 +13,5 @@ pyyaml
 pydantic-settings
 pytz
 # Voice processing
-openai-whisper==20231117  # Whisper for speech recognition
-gTTS==2.5.0  # Google Text-to-Speech
+# openai-whisper==20231117  # Whisper for speech recognition
+# gTTS==2.5.0  # Google Text-to-Speech
