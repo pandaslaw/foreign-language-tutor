@@ -12,19 +12,21 @@ from src.dal import MessagesRepository, UsersRepository
 
 logger = getLogger(__name__)
 
+
 def clean_llm_response(text: str) -> str:
     """Remove problematic markdown formatting from LLM responses."""
     # Remove markdown headers (e.g., #### Title)
-    text = re.sub(r'^#{1,6}\s+(.+?)$', r'\1', text, flags=re.MULTILINE)
+    text = re.sub(r"^#{1,6}\s+(.+?)$", r"\1", text, flags=re.MULTILINE)
     # Remove double asterisks (bold)
-    text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
+    text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
     # Remove single asterisks (italic)
-    text = re.sub(r'\*([^*]+?)\*', r'\1', text)
+    text = re.sub(r"\*([^*]+?)\*", r"\1", text)
     # Remove triple backticks (code blocks)
-    text = re.sub(r'```[^\n]*\n(.+?)```', r'\1', text, flags=re.DOTALL)
+    text = re.sub(r"```[^\n]*\n(.+?)```", r"\1", text, flags=re.DOTALL)
     # Remove single backticks (inline code)
-    text = re.sub(r'`([^`]+?)`', r'\1', text)
+    text = re.sub(r"`([^`]+?)`", r"\1", text)
     return text
+
 
 def load_history_and_generate_answer(
     user_id: int,
@@ -43,7 +45,9 @@ def load_history_and_generate_answer(
 
         # Get user data and recent messages
         user_data = UsersRepository.get_user_by_id(user_id)
-        messages_history = MessagesRepository.get_recent_messages(user_id, limit=10)  # Reduced from 50 to save memory
+        messages_history = MessagesRepository.get_recent_messages(
+            user_id, limit=10
+        )  # Reduced from 50 to save memory
 
         # Update system prompt
         system_prompt_updated = update_system_prompt(
@@ -62,6 +66,7 @@ def load_history_and_generate_answer(
         return "I'm having trouble processing your message right now. Please try again in a moment."
     finally:
         gc.collect()  # Force garbage collection
+
 
 def generate_answer(
     user_input: str, system_prompt: str = None, assistant_prompt: str = None
@@ -122,7 +127,7 @@ def generate_answer(
             max_tokens=500,  # Limit response length
         )
         output = response.choices[0].message.content
-        
+
         # Clean any markdown formatting from the response
         output = clean_llm_response(output)
 
@@ -144,6 +149,7 @@ def generate_answer(
         return "I'm having trouble generating a response right now. Please try again in a moment."
     finally:
         gc.collect()  # Force garbage collection
+
 
 def update_system_prompt(
     messages: List[Dict[str, Union[str, dt.datetime]]],
@@ -170,6 +176,7 @@ def update_system_prompt(
     updated_prompt = f"{system_prompt}\n{summarized_history}"
 
     return updated_prompt
+
 
 def summarize_history(
     messages: List[Dict[str, Union[str, dt.datetime]]], n_last_messages: int = None
@@ -200,6 +207,7 @@ def summarize_history(
         + "\n\n"
     )
     return previous_dialogue
+
 
 def transcribe_audio(file_path):
     # model = whisper.load_model("base")  # models: base, small, medium, large)
