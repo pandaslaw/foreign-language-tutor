@@ -77,7 +77,7 @@ def generate_answer(
     """
     start_time = time.time()
     try:
-        if not user_input:
+        if not user_input and not assistant_prompt:
             logger.info("User input is empty. SKIPPING")
             return ""
 

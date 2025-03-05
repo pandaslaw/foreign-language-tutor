@@ -21,7 +21,7 @@ class LearningScheduler:
         self.tz = pytz.timezone("Europe/Istanbul")
         self.prompts = {}
         self.load_prompts()
-        
+
         # Add logging for scheduler events
         self.scheduler.add_listener(self._log_job_events)
 
@@ -38,7 +38,7 @@ class LearningScheduler:
         """Send a practice message based on the time of day"""
         try:
             logger.info(f"Attempting to send {session_type} message to user {user_id}")
-            
+
             # Get user data
             user_data = UsersRepository.get_user_by_id(user_id)
             if not user_data:
@@ -79,9 +79,11 @@ class LearningScheduler:
                 fallback_messages = {
                     "morning": "Günaydın! 🌞 Good morning! Let's practice some Turkish. How did you sleep? Nasıl uyudun?",
                     "midday": "Merhaba! 🌤️ Hello! Time for our Turkish practice. Have you had lunch? Öğle yemeği yedin mi?",
-                    "evening": "İyi akşamlar! 🌙 Good evening! Let's review what we learned today. How was your day? Günün nasıl geçti?"
+                    "evening": "İyi akşamlar! 🌙 Good evening! Let's review what we learned today. How was your day? Günün nasıl geçti?",
                 }
-                response = fallback_messages.get(session_type, "Merhaba! Let's practice Turkish!")
+                response = fallback_messages.get(
+                    session_type, "Merhaba! Let's practice Turkish!"
+                )
 
             # Save bot's message
             MessagesRepository.save_message(user_id, response, is_llm=True)
@@ -93,7 +95,9 @@ class LearningScheduler:
                 parse_mode=None,  # Don't use markdown to avoid formatting issues
             )
 
-            logger.info(f"Successfully sent {session_type} practice message to user {user_id}")
+            logger.info(
+                f"Successfully sent {session_type} practice message to user {user_id}"
+            )
 
         except Exception as e:
             logger.error(f"Error sending practice message: {e}", exc_info=True)
@@ -111,26 +115,7 @@ class LearningScheduler:
         """Schedule daily practice sessions for a user"""
         try:
             logger.info(f"Scheduling daily sessions for user {user_id}")
-            
-            # For testing - set to current time + 1 minute
-            from datetime import datetime
-            current_time = datetime.now(self.tz)
-            test_minute = (current_time.minute + 1) % 60
-            test_hour = current_time.hour + (1 if test_minute == 0 else 0)
-            
-            # Evening session for testing
-            self.scheduler.add_job(
-                self._run_coroutine,
-                CronTrigger(hour=test_hour, minute=test_minute, timezone=self.tz),
-                args=[self.send_practice_message(user_id, "evening")],
-                id=f"evening_session_{user_id}",
-                replace_existing=True,
-                misfire_grace_time=60,  # Allow job to be run up to 1 minute late
-            )
-            logger.info(f"Scheduled evening session for user {user_id} at {test_hour}:{test_minute}")
 
-            # Regular sessions - commented out for testing
-            """
             # Morning session (9-10 GMT+3)
             self.scheduler.add_job(
                 self._run_coroutine,
@@ -160,13 +145,14 @@ class LearningScheduler:
                 replace_existing=True,
                 misfire_grace_time=300,
             )
-            """
 
             logger.info(f"Successfully scheduled all sessions for user {user_id}")
             # Print all jobs for this user
             jobs = self.scheduler.get_jobs()
             for job in jobs:
-                logger.info(f"Scheduled job: {job.id} - Next run time: {job.next_run_time}")
+                logger.info(
+                    f"Scheduled job: {job.id} - Next run time: {job.next_run_time}"
+                )
 
         except Exception as e:
             logger.error(f"Error scheduling sessions: {e}", exc_info=True)

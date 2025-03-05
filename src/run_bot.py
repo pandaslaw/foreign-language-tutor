@@ -22,6 +22,7 @@ from src.admin_handlers import (
     health_check,
     send_today_logs,
     send_all_logs,
+    trigger_morning_scenario,
 )
 
 import os
@@ -56,7 +57,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     tg_id = user.id
 
     # Save user info if not exists
-    UsersRepository.save_user(tg_id, user.username, user.first_name, user.last_name)
+    # UsersRepository.create_user(tg_id, user.username, user.first_name, user.last_name)
 
     # Schedule daily practice sessions for this user
     scheduler.schedule_daily_sessions(tg_id)
@@ -64,10 +65,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
     reply_keyboard = [["English", "Turkish", "Spanish"]]
     await update.message.reply_text(
-        "Hi! I'm your language learning assistant. "
-        "What is your native language?",
+        "Hi! I'm your language learning assistant. " "What is your native language?",
         reply_markup=ReplyKeyboardMarkup(
-            reply_keyboard, one_time_keyboard=True, input_field_placeholder="Your language?"
+            reply_keyboard,
+            one_time_keyboard=True,
+            input_field_placeholder="Your language?",
         ),
     )
 
@@ -217,10 +219,14 @@ if __name__ == "__main__":
     scheduler.start()
     logger.info("Learning scheduler started")
 
+    # Make scheduler accessible to handlers
+    app.scheduler = scheduler
+
     # Add admin command handlers
     app.add_handler(CommandHandler("health", health_check))
     app.add_handler(CommandHandler("send_logs", send_today_logs))
     app.add_handler(CommandHandler("send_all_logs", send_all_logs))
+    app.add_handler(CommandHandler("trigger_morning", trigger_morning_scenario))
 
     # Add conversation handler
     conversation_handler = ConversationHandler(

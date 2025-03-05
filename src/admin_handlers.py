@@ -8,6 +8,7 @@ from telegram import Update
 from telegram.ext import CallbackContext
 
 from src.config import app_settings
+from src.scheduler import LearningScheduler
 
 logger = getLogger(__name__)
 
@@ -103,3 +104,23 @@ async def send_all_logs(update: Update, context: CallbackContext) -> None:
         logger.warning(
             f"User {user_id} not authorized to perform /send_all_logs command."
         )
+
+
+async def trigger_morning_scenario(update: Update, context: CallbackContext) -> None:
+    """Manually trigger morning scenario for testing."""
+    user_id = update.message.from_user.id
+
+    if user_id in app_settings.ADMIN_USER_IDS:
+        try:
+            # Get the scheduler instance from application
+            scheduler = context.application.scheduler
+
+            # Reuse the scheduler's send_practice_message
+            await scheduler.send_practice_message(user_id, "morning")
+            logger.info(f"Morning scenario triggered manually by admin {user_id}")
+        except Exception as e:
+            error_msg = "Error triggering morning scenario"
+            logger.error(f"{error_msg}: {e}", exc_info=True)
+            await update.message.reply_text(f"{error_msg}. Please try again later.")
+    else:
+        logger.warning(f"User {user_id} not authorized to trigger morning scenario.")
