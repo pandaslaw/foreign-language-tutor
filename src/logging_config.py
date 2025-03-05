@@ -1,12 +1,18 @@
+import datetime as dt
 import logging
 import logging.config
 import os
 
 # Get the root directory of the project
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../"))
+LOG_DIR = os.path.join(ROOT_DIR, "logs")
+os.makedirs(LOG_DIR, exist_ok=True)  # Ensure the log directory exists
 
 
 def setup_logging():
+    # Create a timestamp for the log file name. Format: YYYYMMDD
+    timestamp = dt.datetime.now().strftime("%Y%m%d")
+
     logging.config.dictConfig(
         {
             "version": 1,
@@ -27,18 +33,20 @@ def setup_logging():
             },
             "handlers": {
                 "info_file_handler": {
-                    "class": "logging.handlers.RotatingFileHandler",
-                    "filename": os.path.join(ROOT_DIR, "logs//info.log"),
-                    "maxBytes": 10 * 1024 * 1024,  # 10 MB
+                    "class": "logging.handlers.TimedRotatingFileHandler",
+                    "filename": os.path.join(LOG_DIR, f"info_{timestamp}.log"),
+                    "when": "midnight",  # Rotate at midnight
+                    "interval": 1,  # Every day
                     "backupCount": 5,  # Keep 5 backups
                     "level": "INFO",
                     "formatter": "default",
                     "encoding": "utf-8",
                 },
                 "error_file_handler": {
-                    "class": "logging.handlers.RotatingFileHandler",
-                    "filename": os.path.join(ROOT_DIR, "logs//error.log"),
-                    "maxBytes": 5 * 1024 * 1024,  # 5 MB
+                    "class": "logging.handlers.TimedRotatingFileHandler",
+                    "filename": os.path.join(LOG_DIR, f"error_{timestamp}.log"),
+                    "when": "midnight",  # Rotate at midnight
+                    "interval": 1,  # Every day
                     "backupCount": 5,  # Keep 5 backups
                     "level": "ERROR",
                     "formatter": "detailed",
@@ -51,21 +59,27 @@ def setup_logging():
                 },
             },
             "loggers": {
-                "": {  # Root logger
-                    "level": "DEBUG",
+                # Set up root logger to capture all logs at INFO level
+                "": {
+                    "level": "INFO",
                     "handlers": [
                         "info_file_handler",
                         "error_file_handler",
                         "console_handler",
                     ],
+                    "propagate": True,
                 },
-                "httpx": {
-                    "level": "WARNING",
+                # Set up logger specifically for pyrogram with INFO level
+                "pyrogram": {
+                    "level": "INFO",  # Set Pyrogram logs to INFO level
                     "handlers": [
-                        "console_handler"
-                    ],  # Optional: Still print important logs
-                    "propagate": False,
+                        "info_file_handler",
+                        "error_file_handler",
+                        "console_handler",
+                    ],
+                    "propagate": True,
                 },
+                # Additional loggers can be configured here as needed
             },
         }
     )
