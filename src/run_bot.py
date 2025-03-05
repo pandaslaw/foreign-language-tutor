@@ -3,18 +3,21 @@ from logging import getLogger
 from telegram import ReplyKeyboardMarkup
 from telegram import Update
 from telegram.ext import (
+    Application,
     CommandHandler,
     MessageHandler,
     filters,
     ConversationHandler,
     CallbackContext,
-    ApplicationBuilder, ContextTypes,
+    ContextTypes,
+    ApplicationBuilder,
 )
 
 from src.config import app_settings, SCENARIO_PROMPTS
 from src.dal import MessagesRepository, UsersRepository
 from src.utils import load_history_and_generate_answer, transcribe_audio
 from src.voice_handler import VoiceHandler
+from src.admin_handlers import health_check, send_today_logs, send_all_logs
 
 import os
 import psutil
@@ -23,11 +26,15 @@ import logging
 
 logger = getLogger(__name__)
 
+
 def log_memory_usage():
     """Log current memory usage"""
     process = psutil.Process(os.getpid())
     mem_info = process.memory_info()
-    logger.info(f"Memory usage - RSS: {mem_info.rss / 1024 / 1024:.1f}MB, VMS: {mem_info.vms / 1024 / 1024:.1f}MB")
+    logger.info(
+        f"Memory usage - RSS: {mem_info.rss / 1024 / 1024:.1f}MB, VMS: {mem_info.vms / 1024 / 1024:.1f}MB"
+    )
+
 
 ASK_NATIVE_LANGUAGE = 0
 ASK_TARGET_LANGUAGE = 1
@@ -115,9 +122,9 @@ async def ask_scenario(update: Update, context: CallbackContext) -> int:
     scenario = update.message.text
 
     logger.info(f"Set current scenario to '{scenario}'.")
-    context.user_data[
-        "current_scenario"
-    ] = scenario  # Store selected scenario in user data
+    context.user_data["current_scenario"] = (
+        scenario  # Store selected scenario in user data
+    )
 
     logger.info(f"Call LLM for the first prompt in the selected scenario")
     llm_response = load_history_and_generate_answer(tg_id, SCENARIO_PROMPTS[scenario])
@@ -134,17 +141,19 @@ async def ask_scenario(update: Update, context: CallbackContext) -> int:
     return EXECUTE_SCENARIO
 
 
-async def handle_text_message(update: Update, context: CallbackContext, transcribed_text: str = None):
+async def handle_text_message(
+    update: Update, context: CallbackContext, transcribed_text: str = None
+):
     """Handle text messages or transcribed voice messages"""
     start_time = time.time()
     log_memory_usage()
     tg_id = update.message.from_user.id
-    
+
     # Use transcribed text if provided, otherwise use the text message
     message_text = transcribed_text or update.message.text
-    
+
     logger.info(f"Processing message from user '{tg_id}': {message_text}")
-    
+
     try:
         # Save message to history
         current_scenario = get_current_scenario(context.user_data)
@@ -154,17 +163,17 @@ async def handle_text_message(update: Update, context: CallbackContext, transcri
 
         # Generate response
         response = load_history_and_generate_answer(tg_id, message_text)
-        
+
         # Save bot's response
         MessagesRepository.save_message(tg_id, response, is_llm=True)
-        
+
         # Send response
         await update.message.reply_text(response)
-        
+
         processing_time = time.time() - start_time
         logger.info(f"Message processing took {processing_time:.2f} seconds")
         log_memory_usage()
-        
+
     except Exception as e:
         logger.error(f"Error processing message: {e}", exc_info=True)
         await update.message.reply_text(
@@ -178,21 +187,6 @@ async def cancel(update: Update, context: CallbackContext) -> int:
         "Goodbye! Feel free to come back anytime for more practice."
     )
     return ConversationHandler.END
-
-
-async def health_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    log_memory_usage()
-    user_id = update.message.from_user.id
-    if user_id in app_settings.ADMIN_USER_IDS:
-        await context.bot.send_message(chat_id=user_id, text="Bot is live and running!")
-        logger.info(
-            f"User {user_id} checked bot's status via /health command. Bot is live and running!"
-        )
-    else:
-        logger.warning(
-            f"You are not an admin user and not authorized "
-            f"to perform /health command. User id: {user_id}."
-        )
 
 
 def get_current_scenario(user_data):
@@ -209,6 +203,12 @@ if __name__ == "__main__":
     # Create the application and add the conversation handler
     app = ApplicationBuilder().token(app_settings.TELEGRAM_BOT_TOKEN).build()
 
+    # Add admin command handlers
+    app.add_handler(CommandHandler("health", health_check))
+    app.add_handler(CommandHandler("send_logs", send_today_logs))
+    app.add_handler(CommandHandler("send_all_logs", send_all_logs))
+
+    # Add conversation handler
     conversation_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
         states={
@@ -233,12 +233,14 @@ if __name__ == "__main__":
     )
 
     app.add_handler(conversation_handler)
-    app.add_handler(CommandHandler("health", health_check))
-
     app.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message)
     )
-    app.add_handler(MessageHandler(filters.VOICE & ~filters.COMMAND, VoiceHandler().handle_voice_message))
+    app.add_handler(
+        MessageHandler(
+            filters.VOICE & ~filters.COMMAND, VoiceHandler().handle_voice_message
+        )
+    )
 
     logger.info("Starting bot...")
     app.run_polling()

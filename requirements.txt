@@ -9,6 +9,7 @@ python-telegram-bot
 psycopg2
 pyyaml
 pydantic-settings
+psutil
 # Voice processing
 openai-whisper==20231117  # Whisper for speech recognition
 gTTS==2.5.0  # Google Text-to-Speech
