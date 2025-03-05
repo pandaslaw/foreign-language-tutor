@@ -45,27 +45,40 @@ class LearningScheduler:
                 logger.warning(f"User {user_id} not found in database")
                 return
 
+            native_lang = user_data.get("native_language", "Russian").lower()
+            base_prompt = (
+                f"You are Leyla, a warm and supportive Turkish language tutor. "
+                f"The student's native language is {native_lang}, so ALWAYS respond in {native_lang} with Turkish examples. "
+                f"The student is at A1 level. "
+                f"ALWAYS check any Turkish sentences they write for grammar mistakes. "
+                f"If you find mistakes: "
+                f"1. Point out the error "
+                f"2. Explain the correct form "
+                f"3. Suggest how natives would naturally express this idea "
+                f"4. Give 2-3 alternative ways to say the same thing\n\n"
+            )
+
             # Select appropriate prompt based on session type
             if session_type == "morning":
-                prompt = (
-                    "Let's start our morning Turkish practice! As Leyla, be warm and encouraging. "
-                    "Focus on morning routines, sports, and daily planning. Keep the tone feminine, "
-                    "graceful, and full of positive energy. Ask about their morning routine or plans "
-                    "for the day. Use simple A1 level Turkish with English translations."
+                prompt = base_prompt + (
+                    "Start a morning conversation about daily routines and plans. "
+                    "Keep the tone feminine, graceful, and full of positive energy. "
+                    "Ask about their morning routine or plans for the day. "
+                    "Include simple A1 level Turkish phrases with translations."
                 )
             elif session_type == "midday":
-                prompt = (
-                    "Time for our midday Turkish practice! As Leyla, be warm and supportive. "
-                    "Focus on food, cooking, shopping, and daily life activities. Keep the tone practical "
-                    "and engaging. Ask about their lunch, shopping plans, or current activities. "
-                    "Use simple A1 level Turkish with English translations."
+                prompt = base_prompt + (
+                    "Start a midday conversation about food, cooking, shopping, or daily activities. "
+                    "Keep the tone practical and engaging. "
+                    "Ask about their lunch, shopping plans, or current activities. "
+                    "Include simple A1 level Turkish phrases with translations."
                 )
             else:  # evening
-                prompt = (
-                    "Let's have our evening Turkish conversation! As Leyla, be warm and reflective. "
-                    "Focus on reviewing the day, sharing feelings, and peaceful evening activities. "
-                    "Keep the tone soulful and warm. Ask about their day or evening plans. "
-                    "Use simple A1 level Turkish with English translations."
+                prompt = base_prompt + (
+                    "Start an evening conversation reviewing the day. "
+                    "Keep the tone soulful and warm. "
+                    "Ask about their day or evening plans. "
+                    "Include simple A1 level Turkish phrases with translations."
                 )
 
             # Generate response using LLM
@@ -75,12 +88,19 @@ class LearningScheduler:
             # Validate response
             if not response or not response.strip():
                 logger.error("LLM generated an empty response")
-                # Use fallback message based on session type
-                fallback_messages = {
-                    "morning": "Günaydın! 🌞 Good morning! Let's practice some Turkish. How did you sleep? Nasıl uyudun?",
-                    "midday": "Merhaba! 🌤️ Hello! Time for our Turkish practice. Have you had lunch? Öğle yemeği yedin mi?",
-                    "evening": "İyi akşamlar! 🌙 Good evening! Let's review what we learned today. How was your day? Günün nasıl geçti?",
-                }
+                # Use fallback message based on session type and native language
+                if native_lang == "russian":
+                    fallback_messages = {
+                        "morning": "Доброе утро! 🌞 Давайте попрактикуем турецкий. Как вы спали? По-турецки это: Nasıl uyudun?",
+                        "midday": "Здравствуйте! 🌤️ Время практики турецкого. Вы уже обедали? По-турецки это: Öğle yemeği yedin mi?",
+                        "evening": "Добрый вечер! 🌙 Давайте обсудим ваш день. Как прошёл день? По-турецки это: Günün nasıl geçti?",
+                    }
+                else:
+                    fallback_messages = {
+                        "morning": "Good morning! 🌞 Let's practice Turkish. How did you sleep? In Turkish: Nasıl uyudun?",
+                        "midday": "Hello! 🌤️ Time for Turkish practice. Have you had lunch? In Turkish: Öğle yemeği yedin mi?",
+                        "evening": "Good evening! 🌙 Let's review your day. How was your day? In Turkish: Günün nasıl geçti?",
+                    }
                 response = fallback_messages.get(
                     session_type, "Merhaba! Let's practice Turkish!"
                 )

@@ -161,15 +161,11 @@ def update_system_prompt(
     logger.info(
         "Enriching system prompt with chat history for adding 'context knowledge' to model."
     )
-    native_language = user_data[3]
-    target_language = user_data[4]
-    current_level = user_data[5]
-    learning_goal = user_data[7]
     system_prompt = system_prompt.format(
-        native_language=native_language,
-        target_language=target_language,
-        current_level=current_level,
-        learning_goal=learning_goal,
+        native_language=user_data["native_language"],
+        target_language=user_data["target_language"],
+        current_level=user_data["current_level"],
+        learning_goal=user_data["learning_goal"],
     )
 
     summarized_history = summarize_history(messages)
