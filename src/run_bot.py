@@ -17,7 +17,12 @@ from src.config import app_settings, SCENARIO_PROMPTS
 from src.dal import MessagesRepository, UsersRepository
 from src.utils import load_history_and_generate_answer, transcribe_audio
 from src.voice_handler import VoiceHandler
-from src.admin_handlers import health_check, send_today_logs, send_all_logs
+from src.scheduler import LearningScheduler
+from src.admin_handlers import (
+    health_check,
+    send_today_logs,
+    send_all_logs,
+)
 
 import os
 import psutil
@@ -45,24 +50,27 @@ ASK_SCENARIO = 4
 EXECUTE_SCENARIO = 5
 
 
-async def start(update: Update, context: CallbackContext) -> int:
-    log_memory_usage()
-    logger.info(f"/start command was executed. Greeting the user.")
-    if UsersRepository.get_user_by_id(update.message.from_user.id):
-        await update.message.reply_text(
-            "Welcome to your language learning session! From where would you like to start today?",
-            reply_markup=ReplyKeyboardMarkup(
-                [list(SCENARIO_PROMPTS.keys())], one_time_keyboard=True
-            ),
-        )
-        return ASK_SCENARIO
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Start the conversation and ask user for their native language."""
+    user = update.message.from_user
+    tg_id = user.id
 
+    # Save user info if not exists
+    UsersRepository.save_user(tg_id, user.username, user.first_name, user.last_name)
+
+    # Schedule daily practice sessions for this user
+    scheduler.schedule_daily_sessions(tg_id)
+    logger.info(f"Scheduled daily practice sessions for user {tg_id}")
+
+    reply_keyboard = [["English", "Turkish", "Spanish"]]
     await update.message.reply_text(
-        "Welcome! Let's get started with some quick questions."
+        "Hi! I'm your language learning assistant. "
+        "What is your native language?",
+        reply_markup=ReplyKeyboardMarkup(
+            reply_keyboard, one_time_keyboard=True, input_field_placeholder="Your language?"
+        ),
     )
-    await update.message.reply_text(
-        "What is your native language? (e.g., Russian, English, Spanish, Turkish)"
-    )
+
     return ASK_NATIVE_LANGUAGE
 
 
@@ -200,8 +208,14 @@ def get_current_scenario(user_data):
 if __name__ == "__main__":
     log_memory_usage()
     logger.info("~~~Send any message to a bot to start chatting~~~")
+
     # Create the application and add the conversation handler
     app = ApplicationBuilder().token(app_settings.TELEGRAM_BOT_TOKEN).build()
+
+    # Initialize and start the learning scheduler
+    scheduler = LearningScheduler(app)
+    scheduler.start()
+    logger.info("Learning scheduler started")
 
     # Add admin command handlers
     app.add_handler(CommandHandler("health", health_check))
@@ -243,4 +257,9 @@ if __name__ == "__main__":
     )
 
     logger.info("Starting bot...")
-    app.run_polling()
+    try:
+        app.run_polling()
+    finally:
+        # Ensure scheduler is stopped when app exits
+        scheduler.stop()
+        logger.info("Learning scheduler stopped")

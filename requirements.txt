@@ -1,3 +1,4 @@
+apscheduler
 black
 openai
 pydantic
@@ -6,10 +7,11 @@ python-dotenv
 requests
 pyTelegramBotAPI
 python-telegram-bot
+psutil
 psycopg2
 pyyaml
 pydantic-settings
-psutil
+pytz
 # Voice processing
 openai-whisper==20231117  # Whisper for speech recognition
 gTTS==2.5.0  # Google Text-to-Speech
