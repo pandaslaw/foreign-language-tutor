@@ -1,9 +1,12 @@
 import os
 import asyncio
 from logging import getLogger
+from datetime import datetime, time, timedelta
+from typing import Optional
 
 import pytz
 import yaml
+import requests
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from telegram.ext import Application
@@ -13,7 +16,6 @@ from src.utils import load_history_and_generate_answer
 
 logger = getLogger(__name__)
 
-
 class LearningScheduler:
     def __init__(self, app: Application):
         self.scheduler = BackgroundScheduler()
@@ -21,6 +23,15 @@ class LearningScheduler:
         self.tz = pytz.timezone("Europe/Istanbul")
         self.prompts = {}
         self.load_prompts()
+        self.morning_jobs = {}
+        self.lunch_jobs = {}
+        self.evening_jobs = {}
+        self.health_check_jobs = {}
+        
+        # Default times (in UTC+3)
+        self.morning_time = time(9, 0)  # 9:00 AM
+        self.lunch_time = time(15, 0)   # 3:00 PM
+        self.evening_time = time(22, 0)  # 10:00 PM
 
         # Add logging for scheduler events
         self.scheduler.add_listener(self._log_job_events)
@@ -131,6 +142,49 @@ class LearningScheduler:
         finally:
             loop.close()
 
+    async def _health_check(self, user_id: int):
+        """Perform health check to wake up the service"""
+        try:
+            await self.app.bot.send_message(
+                chat_id=user_id,
+                text="__System health check__",
+                parse_mode=None,  # Don't use markdown to avoid formatting issues
+            )
+        except Exception as e:
+            logger.error(f"Health check failed: {e}")
+
+    def _schedule_health_check(self, user_id: int, scenario_time: time):
+        """Schedule a health check 5 minutes before a scenario"""
+        if user_id in self.health_check_jobs:
+            self.health_check_jobs[user_id].schedule_removal()
+
+        # Calculate health check time (5 minutes before scenario)
+        next_run = self._get_next_run_time(scenario_time)
+        health_check_time = (next_run - timedelta(minutes=5)).time()
+        
+        # Schedule daily health check
+        job = self.scheduler.add_job(
+            self._run_coroutine,
+            CronTrigger(hour=health_check_time.hour, minute=health_check_time.minute, timezone=self.tz),
+            args=[self._health_check(user_id)],
+            id=f"health_check_{user_id}_{scenario_time}",
+            replace_existing=True,
+            misfire_grace_time=300,
+        )
+        self.health_check_jobs[user_id] = job
+        logger.info(f"Scheduled health check for user {user_id} at {health_check_time}")
+
+    def _get_next_run_time(self, target_time: time) -> datetime:
+        """Get the next run time in the specified timezone"""
+        now = datetime.now(self.tz)
+        target_dt = datetime.combine(now.date(), target_time)
+        target_dt = self.tz.localize(target_dt)
+        
+        if target_dt <= now:
+            target_dt += timedelta(days=1)
+        
+        return target_dt
+
     def schedule_daily_sessions(self, user_id: int):
         """Schedule daily practice sessions for a user"""
         try:
@@ -145,6 +199,7 @@ class LearningScheduler:
                 replace_existing=True,
                 misfire_grace_time=300,
             )
+            self._schedule_health_check(user_id, self.morning_time)
 
             # Afternoon session (15-16 GMT+3)
             self.scheduler.add_job(
@@ -155,6 +210,7 @@ class LearningScheduler:
                 replace_existing=True,
                 misfire_grace_time=300,
             )
+            self._schedule_health_check(user_id, self.lunch_time)
 
             # Evening session (22-23 GMT+3)
             self.scheduler.add_job(
@@ -165,6 +221,7 @@ class LearningScheduler:
                 replace_existing=True,
                 misfire_grace_time=300,
             )
+            self._schedule_health_check(user_id, self.evening_time)
 
             logger.info(f"Successfully scheduled all sessions for user {user_id}")
             # Print all jobs for this user
