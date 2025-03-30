@@ -1,287 +1,271 @@
-import os
-import asyncio
-from logging import getLogger
-from datetime import datetime, time, timedelta
-from typing import Optional
+import logging
+import random
+from datetime import datetime, time
+from typing import Dict, List
 
-import pytz
 import yaml
-import requests
-from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-from telegram.ext import Application
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
-from src.dal import MessagesRepository, UsersRepository
+from src.config import app_settings
+from src.user_settings import UserSettings
+from src.learning.vocabulary_manager import VocabularyManager
+from src.learning.progress_tracker import ProgressTracker
 from src.utils import load_history_and_generate_answer
+from src.database import get_db_connection
 
-logger = getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 class LearningScheduler:
-    def __init__(self, app: Application):
-        self.scheduler = BackgroundScheduler()
-        self.app = app
-        self.tz = pytz.timezone("Europe/Istanbul")
-        self.prompts = {}
-        self.load_prompts()
-        self.morning_jobs = {}
-        self.lunch_jobs = {}
-        self.evening_jobs = {}
-        self.health_check_jobs = {}
+    def __init__(self, bot):
+        self.bot = bot
+        self.scheduler = AsyncIOScheduler()
+        self.prompts = app_settings.SYSTEM_PROMPTS["daily_interactions"]
+        self.scheduler.start()
+
+    def _get_prompt_for_session(self, session_type: str, user_data: Dict) -> str:
+        """Get a personalized prompt for the session"""
+        if session_type not in self.prompts:
+            return ""
+
+        session_data = self.prompts[session_type]
+        base_prompt = session_data['base_prompt']
         
-        # Default times (in UTC+3)
-        self.morning_time = time(9, 0)  # 9:00 AM
-        self.lunch_time = time(15, 0)   # 3:00 PM
-        self.evening_time = time(22, 0)  # 10:00 PM
-
-        # Add logging for scheduler events
-        self.scheduler.add_listener(self._log_job_events)
-
-    def _log_job_events(self, event):
-        """Log scheduler events for debugging"""
-        if event.code == 4:  # EVENT_JOB_MISSED
-            logger.warning(f"Job missed: {event.job_id}")
-        elif event.code == 2:  # EVENT_JOB_EXECUTED
-            logger.info(f"Job executed successfully: {event.job_id}")
-        elif event.code == 8:  # EVENT_JOB_ERROR
-            logger.error(f"Job failed: {event.job_id}, Error: {event.exception}")
-
-    async def send_practice_message(self, user_id: int, session_type: str):
-        """Send a practice message based on the time of day"""
-        try:
-            logger.info(f"Attempting to send {session_type} message to user {user_id}")
-
-            # Get user data
-            user_data = UsersRepository.get_user_by_id(user_id)
-            if not user_data:
-                logger.warning(f"User {user_id} not found in database")
-                return
-
-            native_lang = user_data.get("native_language", "Russian").lower()
-            base_prompt = (
-                f"You are Leyla, a warm and supportive Turkish language tutor. "
-                f"The student's native language is {native_lang}, so ALWAYS respond in {native_lang} with Turkish examples. "
-                f"The student is at A1 level. "
-                f"ALWAYS check any Turkish sentences they write for grammar mistakes. "
-                f"If you find mistakes: "
-                f"1. Point out the error "
-                f"2. Explain the correct form "
-                f"3. Suggest how natives would naturally express this idea "
-                f"4. Give 2-3 alternative ways to say the same thing\n\n"
-            )
-
-            # Select appropriate prompt based on session type
-            if session_type == "morning":
-                prompt = base_prompt + (
-                    "Start a morning conversation about daily routines and plans. "
-                    "Keep the tone feminine, graceful, and full of positive energy. "
-                    "Ask about their morning routine or plans for the day. "
-                    "Include simple A1 level Turkish phrases with translations."
-                )
-            elif session_type == "midday":
-                prompt = base_prompt + (
-                    "Start a midday conversation about food, cooking, shopping, or daily activities. "
-                    "Keep the tone practical and engaging. "
-                    "Ask about their lunch, shopping plans, or current activities. "
-                    "Include simple A1 level Turkish phrases with translations."
-                )
-            else:  # evening
-                prompt = base_prompt + (
-                    "Start an evening conversation reviewing the day. "
-                    "Keep the tone soulful and warm. "
-                    "Ask about their day or evening plans. "
-                    "Include simple A1 level Turkish phrases with translations."
-                )
-
-            # Generate response using LLM
-            response = load_history_and_generate_answer(user_id, "", prompt)
-            logger.info(f"Generated response for user {user_id}")
-
-            # Validate response
-            if not response or not response.strip():
-                logger.error("LLM generated an empty response")
-                # Use fallback message based on session type and native language
-                if native_lang == "russian":
-                    fallback_messages = {
-                        "morning": "Доброе утро! 🌞 Давайте попрактикуем турецкий. Как вы спали? По-турецки это: Nasıl uyudun?",
-                        "midday": "Здравствуйте! 🌤️ Время практики турецкого. Вы уже обедали? По-турецки это: Öğle yemeği yedin mi?",
-                        "evening": "Добрый вечер! 🌙 Давайте обсудим ваш день. Как прошёл день? По-турецки это: Günün nasıl geçti?",
-                    }
-                else:
-                    fallback_messages = {
-                        "morning": "Good morning! 🌞 Let's practice Turkish. How did you sleep? In Turkish: Nasıl uyudun?",
-                        "midday": "Hello! 🌤️ Time for Turkish practice. Have you had lunch? In Turkish: Öğle yemeği yedin mi?",
-                        "evening": "Good evening! 🌙 Let's review your day. How was your day? In Turkish: Günün nasıl geçti?",
-                    }
-                response = fallback_messages.get(
-                    session_type, "Merhaba! Let's practice Turkish!"
-                )
-
-            # Save bot's message
-            MessagesRepository.save_message(user_id, response, is_llm=True)
-
-            # Send message - using the bot instance directly from app
-            await self.app.bot.send_message(
-                chat_id=user_id,
-                text=response,
-                parse_mode=None,  # Don't use markdown to avoid formatting issues
-            )
-
-            logger.info(
-                f"Successfully sent {session_type} practice message to user {user_id}"
-            )
-
-        except Exception as e:
-            logger.error(f"Error sending practice message: {e}", exc_info=True)
-
-    def _run_coroutine(self, coroutine):
-        """Helper function to run coroutines in the scheduler"""
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            return loop.run_until_complete(coroutine)
-        finally:
-            loop.close()
-
-    async def _health_check(self, user_id: int):
-        """Perform health check to wake up the service"""
-        try:
-            await self.app.bot.send_message(
-                chat_id=user_id,
-                text="__System health check__",
-                parse_mode=None,  # Don't use markdown to avoid formatting issues
-            )
-        except Exception as e:
-            logger.error(f"Health check failed: {e}")
-
-    def _schedule_health_check(self, user_id: int, scenario_time: time):
-        """Schedule a health check 5 minutes before a scenario"""
-        if user_id in self.health_check_jobs:
-            self.health_check_jobs[user_id].schedule_removal()
-
-        # Calculate health check time (5 minutes before scenario)
-        next_run = self._get_next_run_time(scenario_time)
-        health_check_time = (next_run - timedelta(minutes=5)).time()
+        # Get a random theme that matches user's goals
+        themes = session_data['themes']
+        if 'learning_goal' in user_data:
+            # Filter themes based on user's goal
+            goal = user_data['learning_goal'].lower()
+            if 'daily' in goal or 'conversation' in goal:
+                preferred_themes = [t for t in themes if any(k in str(t).lower() for k in ['daily', 'routine', 'casual'])]
+            elif 'shopping' in goal:
+                preferred_themes = [t for t in themes if any(k in str(t).lower() for k in ['shopping', 'market', 'food'])]
+            elif 'direction' in goal:
+                preferred_themes = [t for t in themes if any(k in str(t).lower() for k in ['location', 'direction', 'travel'])]
+            else:
+                preferred_themes = themes
+            
+            theme = random.choice(preferred_themes if preferred_themes else themes)
+        else:
+            theme = random.choice(themes)
+            
+        theme_data = list(theme.values())[0]
         
-        # Schedule daily health check
-        job = self.scheduler.add_job(
-            self._run_coroutine,
-            CronTrigger(hour=health_check_time.hour, minute=health_check_time.minute, timezone=self.tz),
-            args=[self._health_check(user_id)],
-            id=f"health_check_{user_id}_{scenario_time}",
-            replace_existing=True,
-            misfire_grace_time=300,
+        # Customize base prompt with user data
+        prompt = base_prompt.format(
+            native_lang=user_data['native_language'],
+            level=user_data['current_level']
         )
-        self.health_check_jobs[user_id] = job
-        logger.info(f"Scheduled health check for user {user_id} at {health_check_time}")
-
-    def _get_next_run_time(self, target_time: time) -> datetime:
-        """Get the next run time in the specified timezone"""
-        now = datetime.now(self.tz)
-        target_dt = datetime.combine(now.date(), target_time)
-        target_dt = self.tz.localize(target_dt)
         
-        if target_dt <= now:
-            target_dt += timedelta(days=1)
+        # Add theme context
+        prompt += f"\n\nUse this Turkish phrase: {theme_data['tr']}"
+        prompt += f"\nContext: {theme_data['context']}"
         
-        return target_dt
+        # Add personality guidance
+        prompt += "\n\nRemember to be like Leyla from Kara Sevda - warm, wise, and supportive in your responses."
+        
+        # Add session-specific tone
+        if session_type == 'morning':
+            prompt += "\nKeep the tone inspiring, feminine, graceful, with positive energy."
+        elif session_type == 'afternoon':
+            prompt += "\nFocus on practical daily life activities and cultural elements."
+        else:  # evening
+            prompt += "\nMaintain a soulful, warm, retrospective tone."
+        
+        return prompt
 
     def schedule_daily_sessions(self, user_id: int):
-        """Schedule daily practice sessions for a user"""
+        """Schedule personalized daily learning sessions"""
         try:
-            logger.info(f"Scheduling daily sessions for user {user_id}")
+            # Get user's reminder preferences
+            reminders = UserSettings.get_reminder_preferences(user_id)
+            
+            # Schedule each reminder type
+            for reminder_type, settings in reminders.items():
+                if settings['enabled']:
+                    hour, minute = map(int, settings['time'].split(':'))
+                    
+                    # Schedule the reminder
+                    self.scheduler.add_job(
+                        self._send_reminder,
+                        CronTrigger(hour=hour, minute=minute),
+                        args=[user_id, reminder_type],
+                        id=f"reminder_{reminder_type}_{user_id}",
+                        replace_existing=True
+                    )
+                    
+                    logger.info(f"Scheduled {reminder_type} reminder for user {user_id} at {settings['time']}")
+            
+        except Exception as e:
+            logger.error(f"Error scheduling sessions for user {user_id}: {e}")
 
-            # Morning session (9-10 GMT+3)
-            self.scheduler.add_job(
-                self._run_coroutine,
-                CronTrigger(hour=9, minute="0-59/15", timezone=self.tz),
-                args=[self.send_practice_message(user_id, "morning")],
-                id=f"morning_session_{user_id}",
-                replace_existing=True,
-                misfire_grace_time=300,
-            )
-            self._schedule_health_check(user_id, self.morning_time)
+    async def _send_reminder(self, user_id: int, reminder_type: str):
+        """Send a reminder with personalized content"""
+        try:
+            # Get user data for personalization
+            user_data = await self._get_user_data(user_id)
+            if not user_data:
+                return
 
-            # Afternoon session (15-16 GMT+3)
-            self.scheduler.add_job(
-                self._run_coroutine,
-                CronTrigger(hour=15, minute="0-59/15", timezone=self.tz),
-                args=[self.send_practice_message(user_id, "midday")],
-                id=f"midday_session_{user_id}",
-                replace_existing=True,
-                misfire_grace_time=300,
-            )
-            self._schedule_health_check(user_id, self.lunch_time)
+            # Generate personalized message using LLM
+            prompt = self._get_prompt_for_session(reminder_type, user_data)
+            conversation_message = await load_history_and_generate_answer(user_id, "", prompt)
 
-            # Evening session (22-23 GMT+3)
-            self.scheduler.add_job(
-                self._run_coroutine,
-                CronTrigger(hour=22, minute="0-59/15", timezone=self.tz),
-                args=[self.send_practice_message(user_id, "evening")],
-                id=f"evening_session_{user_id}",
-                replace_existing=True,
-                misfire_grace_time=300,
-            )
-            self._schedule_health_check(user_id, self.evening_time)
+            # Get learning content based on reminder type
+            if reminder_type == 'morning':
+                await self._morning_session(user_id, conversation_message)
+            elif reminder_type == 'afternoon':
+                await self._vocabulary_session(user_id, conversation_message)
+            elif reminder_type == 'evening':
+                await self._progress_review(user_id, conversation_message)
+                
+        except Exception as e:
+            logger.error(f"Error sending {reminder_type} reminder to user {user_id}: {e}")
 
-            logger.info(f"Successfully scheduled all sessions for user {user_id}")
-            # Print all jobs for this user
-            jobs = self.scheduler.get_jobs()
-            for job in jobs:
-                logger.info(
-                    f"Scheduled job: {job.id} - Next run time: {job.next_run_time}"
+    async def _get_user_data(self, user_id: int) -> Dict:
+        """Get user data for personalization"""
+        try:
+            with get_db_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        SELECT 
+                            username,
+                            first_name,
+                            last_name,
+                            native_language,
+                            target_language,
+                            current_level,
+                            learning_goal,
+                            settings
+                        FROM users 
+                        WHERE telegram_user_id = %s
+                    """, (user_id,))
+                    
+                    row = cur.fetchone()
+                    if not row:
+                        logger.error(f"User {user_id} not found in database")
+                        return None
+                        
+                    return {
+                        'username': row[0],
+                        'first_name': row[1],
+                        'last_name': row[2],
+                        'native_language': row[3],
+                        'target_language': row[4],
+                        'current_level': row[5],
+                        'learning_goal': row[6],
+                        'settings': row[7]
+                    }
+        except Exception as e:
+            logger.error(f"Error getting user data: {e}")
+            return None
+
+    async def _morning_session(self, user_id: int, conversation_message: str):
+        """Morning grammar practice session with conversation"""
+        # Get practice suggestions
+        suggestions = ProgressTracker.get_practice_suggestions(user_id, limit=1)
+        
+        # Create keyboard based on available practice
+        keyboard = []
+        if suggestions:
+            suggestion = suggestions[0]
+            keyboard.append([
+                InlineKeyboardButton(
+                    f"🎯 Practice {suggestion['skill'].replace('_', ' ').title()}", 
+                    callback_data=f"practice_{suggestion['skill']}"
                 )
-
-        except Exception as e:
-            logger.error(f"Error scheduling sessions: {e}", exc_info=True)
-
-    def load_prompts(self):
-        """Load conversation prompts from YAML file"""
-        prompts_file = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)),
-            "docs",
-            "prompts_conversation.yaml",
+            ])
+        
+        keyboard.extend([
+            [InlineKeyboardButton("💬 Continue Conversation", callback_data="continue_chat")],
+            [InlineKeyboardButton("⏰ Remind Later", callback_data="remind_later")]
+        ])
+        
+        await self.bot.send_message(
+            user_id,
+            conversation_message,
+            reply_markup=InlineKeyboardMarkup(keyboard)
         )
-        try:
-            with open(prompts_file, "r", encoding="utf-8") as f:
-                self.prompts = yaml.safe_load(f)
-            logger.info("Successfully loaded conversation prompts")
-        except Exception as e:
-            logger.error(f"Error loading prompts: {e}")
-            self.prompts = {
-                "morning_session": {
-                    "default": ["Good morning! Let's practice Turkish!"]
-                },
-                "midday_session": {
-                    "default": ["Hello! Time for some Turkish practice!"]
-                },
-                "evening_session": {
-                    "default": ["Good evening! Let's review what we learned today!"]
-                },
-            }
 
-    def start(self):
-        """Start the scheduler"""
-        try:
-            if not self.scheduler.running:
-                self.scheduler.start()
-                logger.info("Learning scheduler started successfully")
-                # Print all scheduled jobs
-                jobs = self.scheduler.get_jobs()
-                logger.info(f"Current scheduled jobs: {len(jobs)}")
-                for job in jobs:
-                    logger.info(f"Job: {job.id} - Next run time: {job.next_run_time}")
-            else:
-                logger.warning("Scheduler is already running")
-        except Exception as e:
-            logger.error(f"Error starting scheduler: {e}", exc_info=True)
+    async def _vocabulary_session(self, user_id: int, conversation_message: str):
+        """Afternoon vocabulary learning session with conversation"""
+        # Get words due for review
+        words = VocabularyManager.get_words_for_review(user_id, limit=5)
+        
+        # Send conversation message first
+        await self.bot.send_message(
+            user_id,
+            conversation_message
+        )
+        
+        # Then send vocabulary practice options
+        if not words:
+            message = (
+                "Would you like to learn some new words from the most frequent 100 words? "
+                "I'll focus on words related to our conversation topic."
+            )
+            keyboard = [[
+                InlineKeyboardButton("📚 Learn New Words", callback_data="new_words"),
+                InlineKeyboardButton("💬 Just Chat", callback_data="continue_chat")
+            ]]
+        else:
+            message = f"You have {len(words)} words to review:\n"
+            for word in words[:3]:
+                message += f"• {word['word']} ({word['mastery_label']})\n"
+            
+            if len(words) > 3:
+                message += f"...and {len(words) - 3} more\n"
+            
+            keyboard = [
+                [InlineKeyboardButton("📝 Review Words", callback_data="review_vocab")],
+                [InlineKeyboardButton("💬 Continue Conversation", callback_data="continue_chat")],
+                [InlineKeyboardButton("⏰ Remind Later", callback_data="remind_later")]
+            ]
+        
+        await self.bot.send_message(
+            user_id,
+            message,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
 
-    def stop(self):
-        """Stop the scheduler"""
-        try:
-            if self.scheduler.running:
-                self.scheduler.shutdown()
-                logger.info("Learning scheduler stopped successfully")
-            else:
-                logger.warning("Scheduler is not running")
-        except Exception as e:
-            logger.error(f"Error stopping scheduler: {e}", exc_info=True)
+    async def _progress_review(self, user_id: int, conversation_message: str):
+        """Evening progress review with conversation"""
+        # Send conversation message first
+        await self.bot.send_message(
+            user_id,
+            conversation_message
+        )
+        
+        # Get progress data
+        streak = ProgressTracker.calculate_daily_streak(user_id)
+        progress = ProgressTracker.get_skill_progress(user_id)
+        
+        # Create progress message
+        message = (
+            f"🔥 Your learning streak: {streak} days\n\n"
+            "Today's Achievements:\n"
+        )
+        
+        # Add today's progress
+        achievements_found = False
+        for category, skills in progress.items():
+            for skill, data in skills.items():
+                if data['last_practice'] and data['last_practice'].date() == datetime.now().date():
+                    message += f"• {skill.replace('_', ' ').title()}: +{data['progress']}%\n"
+                    achievements_found = True
+        
+        if not achievements_found:
+            message += "No practice completed today yet. There's still time! 💪\n"
+        
+        keyboard = [
+            [InlineKeyboardButton("📊 View Progress Details", callback_data="view_progress")],
+            [InlineKeyboardButton("🎯 Set Tomorrow's Goals", callback_data="set_goals")],
+            [InlineKeyboardButton("💬 Continue Conversation", callback_data="continue_chat")]
+        ]
+        
+        await self.bot.send_message(
+            user_id,
+            message,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )

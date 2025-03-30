@@ -44,16 +44,19 @@ class DBConfig:
 
 class AppSettings(BaseSettings):
     """Application settings."""
-    
-    # Bot settings
-    # BOT_TOKEN: str
-    ADMIN_USER_IDS: list[int]
-    
+
     # Database settings
     DATABASE_URL: str
+    MAX_CONNECTIONS: int = 10
+    REQUEST_TIMEOUT: int = 30
+    DATA_RETENTION_DAYS: int = 365
+    ENV: str = "development"
     
+    # Bot settings
+    TELEGRAM_BOT_TOKEN: str
+    ADMIN_USER_IDS: list[int]
+
     # Voice API settings
-    # OPENAI_API_KEY: str
     ELEVENLABS_API_KEY: str
     
     # Voice settings
@@ -62,18 +65,24 @@ class AppSettings(BaseSettings):
     
     # OpenRouter API settings
     OPENROUTER_API_KEY: str
-
     LANGUAGE_MODEL: str
 
     SYSTEM_PROMPT: str = ""
     SYSTEM_PROMPTS: Dict[str, Dict[str, str]] = {}
 
-    TELEGRAM_BOT_TOKEN: str
+    @property
+    def is_production(self) -> bool:
+        """Check if running in production environment"""
+        return self.ENV.lower() == "production"
 
     @property
     def db_config(self) -> DBConfig:
         """Get database configuration"""
-        return DBConfig.from_url(self.DATABASE_URL)
+        config = DBConfig.from_url(self.DATABASE_URL)
+        # Update database pool settings based on environment config
+        config.max_connections = self.MAX_CONNECTIONS
+        config.connection_timeout = self.REQUEST_TIMEOUT
+        return config
 
     class Config:
         """Pydantic config."""
