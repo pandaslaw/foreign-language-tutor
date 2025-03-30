@@ -41,7 +41,7 @@ class MessagesRepository:
                         SELECT message_type, message_text, timestamp 
                         FROM message_history
                         WHERE telegram_user_id = %s
-                        ORDER BY timestamp
+                        ORDER BY timestamp DESC
                         LIMIT %s;
                         """,
                         (user_id, limit),

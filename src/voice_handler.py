@@ -14,6 +14,9 @@ from telegram.ext import CallbackContext
 
 from src.config import app_settings
 
+# Disable symlinks warning
+os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+
 logger = logging.getLogger(__name__)
 
 # Initialize API keys
@@ -21,6 +24,17 @@ logger = logging.getLogger(__name__)
 
 # Initialize ElevenLabs client
 client = ElevenLabs(api_key=app_settings.ELEVENLABS_API_KEY)
+
+# Initialize Whisper model (download happens only once)
+from faster_whisper import WhisperModel
+logger.info("Downloading of base whisper model started.")
+whisper_model = WhisperModel(
+    "base",
+    device="cpu",
+    compute_type="int8",
+    download_root=os.path.join(os.path.dirname(__file__), "..", "models")
+)
+logger.info("Downloading of base whisper model completed.")
 
 # Voice settings for a warm, natural, slightly slower speech
 VOICE_SETTINGS = VoiceSettings(
@@ -94,7 +108,7 @@ class VoiceHandler:
             self, update: Update, context: CallbackContext, temp_files: list
     ) -> Tuple[bool, str]:
         """
-        Transcribe a voice message using OpenAI Whisper API.
+        Transcribe a voice message using Faster Whisper.
         Returns: Tuple[success: bool, text: str]
         """
         try:
@@ -111,14 +125,22 @@ class VoiceHandler:
             await voice_file.download_to_drive(temp_path)
             temp_files.append(temp_path)
 
-            # Convert to text using Whisper API
-            with open(temp_path, "rb") as audio_file:
-                transcript = await asyncio.get_event_loop().run_in_executor(
-                    None,
-                    lambda: openai.Audio.transcribe("whisper-1", audio_file)
+            # Convert to text using Whisper
+            segments, info = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: whisper_model.transcribe(
+                    temp_path,
+                    # language="tr",  # Specify Turkish for better accuracy
+                    beam_size=5,  # Increase beam size for better accuracy
+                    vad_filter=True,  # Filter out non-speech
+                    word_timestamps=False  # No need for timestamps
                 )
+            )
 
-            return True, transcript.text
+            # Combine all segments into final text
+            text = " ".join(segment.text for segment in segments)
+            
+            return True, text.strip()
 
         except Exception as e:
             logger.error(f"Error in transcribe_voice_message: {e}")
@@ -214,7 +236,7 @@ class VoiceHandler:
                 logger.warning("No response found in message history")
                 return
 
-            last_response = last_messages[0]["message_text"]
+            last_response = last_messages[0]["content"]
             logger.info("Converting bot response to voice")
 
             # Convert to voice and send
