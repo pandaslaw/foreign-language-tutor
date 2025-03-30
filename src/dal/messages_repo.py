@@ -3,6 +3,7 @@ from typing import List, Dict, Union
 import logging
 
 from src.database import get_db_connection
+from src.security import encrypt_sensitive_data, decrypt_sensitive_data
 
 logger = logging.getLogger(__name__)
 
@@ -10,8 +11,9 @@ class MessagesRepository:
     """Repository for conversation_history table."""
 
     @staticmethod
+    @encrypt_sensitive_data
     def save_message(user_id, message_text, is_llm=False):
-        """Saves a user message."""
+        """Saves a user message with encryption."""
         message_type = "bot" if is_llm else "user"
 
         try:
@@ -29,10 +31,11 @@ class MessagesRepository:
             logger.error(f"Error saving message for user {user_id}: {e}")
 
     @staticmethod
+    @decrypt_sensitive_data
     def get_recent_messages(
         user_id: int, limit: int = 50
     ) -> List[Dict[str, Union[str, dt.datetime]]]:
-        """Gets last N user messages."""
+        """Gets last N user messages with decryption."""
         try:
             with get_db_connection() as conn:
                 with conn.cursor() as cursor:
@@ -49,9 +52,14 @@ class MessagesRepository:
 
                     rows = cursor.fetchall()
                     messages_with_role = [
-                        {"role": row[0], "content": row[1], "timestamp": row[2]}
+                        {
+                            "role": "assistant" if row[0] == "bot" else "user",
+                            "content": row[1],
+                            "timestamp": row[2],
+                        }
                         for row in rows
                     ]
+
                     return messages_with_role
 
         except Exception as e:
