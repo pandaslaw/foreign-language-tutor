@@ -1,8 +1,10 @@
 import datetime as dt
 from typing import List, Dict, Union
+import logging
 
-from src.database import get_db_connection, release_db_connection
+from src.database import get_db_connection
 
+logger = logging.getLogger(__name__)
 
 class MessagesRepository:
     """Repository for conversation_history table."""
@@ -12,48 +14,49 @@ class MessagesRepository:
         """Saves a user message."""
         message_type = "bot" if is_llm else "user"
 
-        conn = get_db_connection()
         try:
-            with conn.cursor() as cursor:
-                cursor.execute(
-                    """
-                    INSERT INTO message_history (telegram_user_id, message_type, message_text)
-                    VALUES (%s, %s, %s);
-                    """,
-                    (user_id, message_type, message_text),
-                )
-                conn.commit()
-        finally:
-            release_db_connection(conn)
+            with get_db_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute(
+                        """
+                        INSERT INTO message_history (telegram_user_id, message_type, message_text)
+                        VALUES (%s, %s, %s);
+                        """,
+                        (user_id, message_type, message_text),
+                    )
+                    conn.commit()
+        except Exception as e:
+            logger.error(f"Error saving message for user {user_id}: {e}")
 
     @staticmethod
     def get_recent_messages(
         user_id: int, limit: int = 50
     ) -> List[Dict[str, Union[str, dt.datetime]]]:
         """Gets last N user messages."""
-        conn = get_db_connection()
         try:
-            with conn.cursor() as cursor:
-                cursor.execute(
-                    """
-                    SELECT message_type, message_text, timestamp 
-                    FROM message_history
-                    WHERE telegram_user_id = %s
-                    ORDER BY timestamp
-                    LIMIT %s;
-                    """,
-                    (user_id, limit),
-                )
+            with get_db_connection() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute(
+                        """
+                        SELECT message_type, message_text, timestamp 
+                        FROM message_history
+                        WHERE telegram_user_id = %s
+                        ORDER BY timestamp
+                        LIMIT %s;
+                        """,
+                        (user_id, limit),
+                    )
 
-                rows = cursor.fetchall()
-                messages_with_role = [
-                    {"role": row[0], "content": row[1], "timestamp": row[2]}
-                    for row in rows
-                ]
-                return messages_with_role
+                    rows = cursor.fetchall()
+                    messages_with_role = [
+                        {"role": row[0], "content": row[1], "timestamp": row[2]}
+                        for row in rows
+                    ]
+                    return messages_with_role
 
-        finally:
-            release_db_connection(conn)
+        except Exception as e:
+            logger.error(f"Error getting messages for user {user_id}: {e}")
+            return []
 
     @staticmethod
     def join_messages_to_string(messages: List[Dict[str, Union[str, dt.datetime]]]):
