@@ -1,16 +1,45 @@
 import glob
 import os
+from dataclasses import dataclass
 from logging import getLogger
 from pathlib import Path
-from typing import Dict, List
-
-import yaml
+from typing import Dict, List, Optional
+from urllib.parse import urlparse
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings
+from yaml import safe_load
 
 from src.logging_config import setup_logging
 
 logger = getLogger(__name__)
+
+
+@dataclass
+class DBConfig:
+    """Database configuration with secure defaults"""
+    host: str
+    port: int
+    database: str
+    user: str
+    password: str
+    ssl_mode: str = 'require'  # Requires SSL
+    min_connections: int = 1
+    max_connections: int = 10
+    connection_timeout: int = 30
+    idle_timeout: int = 600
+    application_name: str = 'language_tutor_bot'
+
+    @classmethod
+    def from_url(cls, url: str) -> 'DBConfig':
+        """Create config from database URL"""
+        parsed = urlparse(url)
+        return cls(
+            host=parsed.hostname or 'localhost',
+            port=parsed.port or 5432,
+            database=parsed.path[1:] if parsed.path else 'language_tutor',
+            user=parsed.username or 'postgres',
+            password=parsed.password or ''
+        )
 
 
 class AppSettings(BaseSettings):
@@ -21,7 +50,7 @@ class AppSettings(BaseSettings):
     ADMIN_USER_IDS: list[int]
     
     # Database settings
-    DB_CONNECTION_STRING: str
+    DATABASE_URL: str
     
     # Voice API settings
     # OPENAI_API_KEY: str
@@ -41,6 +70,11 @@ class AppSettings(BaseSettings):
 
     TELEGRAM_BOT_TOKEN: str
 
+    @property
+    def db_config(self) -> DBConfig:
+        """Get database configuration"""
+        return DBConfig.from_url(self.DATABASE_URL)
+
     class Config:
         """Pydantic config."""
         env_file = ".env"
@@ -59,7 +93,7 @@ class AppSettings(BaseSettings):
 
         for yaml_file in yaml_files:
             with open(yaml_file, "r", encoding="utf-8") as file:
-                prompts = yaml.safe_load(file)
+                prompts = safe_load(file)
                 file_path = Path(file.name)
                 prompt_category = file_path.stem.replace("prompts_", "")
                 self.SYSTEM_PROMPTS[prompt_category] = {}
@@ -77,7 +111,7 @@ class AppSettings(BaseSettings):
         yaml_file_full_path = os.path.join(root_dir, docs_dir, yaml_file)
 
         with open(yaml_file_full_path, "r", encoding="utf-8") as file:
-            prompts = yaml.safe_load(file)
+            prompts = safe_load(file)
 
         self.SYSTEM_PROMPT = prompts.get("system_prompt", "")
 

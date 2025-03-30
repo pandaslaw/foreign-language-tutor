@@ -1,0 +1,12 @@
+CREATE TABLE learning_progress (
+    id SERIAL PRIMARY KEY,
+    user_id BIGINT REFERENCES users(telegram_user_id),
+    category VARCHAR(50) NOT NULL,
+    skill VARCHAR(50) NOT NULL,
+    level INTEGER DEFAULT 0,
+    progress FLOAT DEFAULT 0,
+    last_practice TIMESTAMP WITH TIME ZONE,
+    next_review TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
