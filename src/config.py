@@ -14,10 +14,24 @@ logger = getLogger(__name__)
 
 
 class AppSettings(BaseSettings):
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-
+    """Application settings."""
+    
+    # Bot settings
+    # BOT_TOKEN: str
+    ADMIN_USER_IDS: list[int]
+    
+    # Database settings
+    DB_CONNECTION_STRING: str
+    
+    # Voice API settings
+    # OPENAI_API_KEY: str
+    ELEVENLABS_API_KEY: str
+    
+    # Voice settings
+    ELEVENLABS_VOICE_ID: str = "Leyla"  # Default voice name
+    VOICE_STYLE: str = "Empathetic"  # Default style for voice generation
+    
+    # OpenRouter API settings
     OPENROUTER_API_KEY: str
 
     LANGUAGE_MODEL: str
@@ -27,9 +41,10 @@ class AppSettings(BaseSettings):
 
     TELEGRAM_BOT_TOKEN: str
 
-    DB_CONNECTION_STRING: str
-
-    ADMIN_USER_IDS: List[int] = []
+    class Config:
+        """Pydantic config."""
+        env_file = ".env"
+        env_file_encoding = "utf-8"
 
     def load_all_prompts(self, dir_path="docs"):
         """Load all prompts from YAML files in the specified directory recursively."""

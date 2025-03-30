@@ -8,10 +8,12 @@ requests
 pyTelegramBotAPI
 python-telegram-bot
 psutil
-psycopg2
+psycopg2-binary
 pyyaml
 pydantic-settings
 pytz
+aiohttp
+elevenlabs
 # Voice processing
 # openai-whisper==20231117  # Whisper for speech recognition
 # gTTS==2.5.0  # Google Text-to-Speech

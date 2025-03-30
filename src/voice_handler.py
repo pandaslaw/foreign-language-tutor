@@ -1,30 +1,57 @@
+import asyncio
+import gc
+import logging
 import os
-import time
 import tempfile
+import time
 from functools import wraps
 from typing import Optional, Tuple
-import logging
-from pathlib import Path
-import gc
 
-# import whisper
-# from gtts import gTTS
+import openai
+from elevenlabs import ElevenLabs, VoiceSettings
 from telegram import Update
 from telegram.ext import CallbackContext
 
+from src.config import app_settings
+
 logger = logging.getLogger(__name__)
 
-# Initialize Whisper model globally to avoid reloading
-MODEL = None
+# Initialize API keys
+# openai.api_key = app_settings.OPENAI_API_KEY
+
+# Initialize ElevenLabs client
+client = ElevenLabs(api_key=app_settings.ELEVENLABS_API_KEY)
+
+# Voice settings for a warm, natural, slightly slower speech
+VOICE_SETTINGS = VoiceSettings(
+    stability=0.71,  # More stable voice
+    similarity_boost=0.75,  # Keep character consistent
+    style=0.35,  # Slight expression variation
+    use_speaker_boost=True,  # Clearer speech
+    speaking_rate=0.85  # Slightly slower than default (1.0)
+)
+
+# Cache for ElevenLabs voices
+VOICE_CACHE = None
 
 
-def init_whisper_model():
-    """Initialize the Whisper model lazily"""
-    global MODEL
-    if MODEL is None:
-        logger.info("Initializing Whisper model...")
-        # MODEL = whisper.load_model("tiny")  # Only ~150MB
-        logger.info("Whisper model initialized")
+def get_voice_by_name(name: str = None) -> Optional[str]:
+    """Get ElevenLabs voice by name with caching."""
+    global VOICE_CACHE
+    try:
+        if VOICE_CACHE is None:
+            voices_response = client.voices.get_all()
+            VOICE_CACHE = {voice.name: voice.voice_id for voice in voices_response.voices}
+        
+        if name and name in VOICE_CACHE:
+            return VOICE_CACHE[name]
+        
+        # If no name specified or not found, return first voice
+        return list(VOICE_CACHE.values())[0] if VOICE_CACHE else None
+            
+    except Exception as e:
+        logger.error(f"Error getting ElevenLabs voices: {e}")
+        return None
 
 
 def cleanup_file(func):
@@ -34,17 +61,16 @@ def cleanup_file(func):
     async def wrapper(*args, **kwargs):
         temp_files = []
         try:
-            result = await func(*args, temp_files=temp_files, **kwargs)
-            return result
+            if "temp_files" in kwargs:
+                temp_files = kwargs["temp_files"]
+            return await func(*args, **kwargs)
         finally:
             for file in temp_files:
                 try:
                     if os.path.exists(file):
                         os.remove(file)
-                        logger.debug(f"Cleaned up temporary file: {file}")
                 except Exception as e:
                     logger.error(f"Error cleaning up file {file}: {e}")
-            # Force garbage collection after file operations
             gc.collect()
 
     return wrapper
@@ -53,167 +79,103 @@ def cleanup_file(func):
 class VoiceHandler:
     def __init__(self, temp_dir: Optional[str] = None):
         """Initialize voice handler with optional custom temp directory"""
-        # Use a subdirectory in the temp directory for better organization
-        self.temp_dir = os.path.join(
-            temp_dir or tempfile.gettempdir(), "foreign_language_tutor"
-        )
-        try:
-            # Create directory with full permissions if it doesn't exist
-            if not os.path.exists(self.temp_dir):
-                os.makedirs(self.temp_dir, mode=0o777, exist_ok=True)
-            else:
-                # Ensure directory has proper permissions
-                os.chmod(self.temp_dir, 0o777)
-            logger.info(f"Using temporary directory: {self.temp_dir}")
-        except Exception as e:
-            logger.error(f"Error creating/accessing temp directory: {e}")
-            # Fallback to a directory in the current working directory
-            self.temp_dir = os.path.join(os.getcwd(), "temp", "foreign_language_tutor")
-            os.makedirs(self.temp_dir, mode=0o777, exist_ok=True)
-            logger.info(f"Using fallback temporary directory: {self.temp_dir}")
+        self.temp_dir = temp_dir or tempfile.gettempdir()
+        os.makedirs(self.temp_dir, exist_ok=True)
+        self.VOICE_SETTINGS = VOICE_SETTINGS
 
-        # Clean any leftover files from previous runs
-        self._cleanup_temp_dir()
-
-        # Initialize model
-        init_whisper_model()
-
-    def _cleanup_temp_dir(self):
-        """Clean up old temporary files"""
-        try:
-            current_time = time.time()
-            for file in os.listdir(self.temp_dir):
-                file_path = os.path.join(self.temp_dir, file)
-                try:
-                    # Remove files older than 1 hour
-                    if os.path.getctime(file_path) < current_time - 3600:
-                        try:
-                            os.remove(file_path)
-                            logger.debug(f"Cleaned up old file: {file_path}")
-                        except PermissionError:
-                            logger.warning(f"Permission denied when cleaning up {file_path}")
-                        except Exception as e:
-                            logger.error(f"Error cleaning up old file {file_path}: {e}")
-                except OSError as e:
-                    logger.error(f"Error accessing file {file_path}: {e}")
-        except Exception as e:
-            logger.error(f"Error cleaning temp directory: {e}")
+    def _get_temp_path(self, prefix: str, suffix: str) -> str:
+        """Generate a temporary file path."""
+        timestamp = int(time.time() * 1000)
+        filename = f"{prefix}_{timestamp}{suffix}"
+        return os.path.join(self.temp_dir, filename)
 
     @cleanup_file
     async def transcribe_voice_message(
-        self, update: Update, context: CallbackContext, temp_files: list
+            self, update: Update, context: CallbackContext, temp_files: list
     ) -> Tuple[bool, str]:
         """
-        Transcribe a voice message from Telegram.
-        Returns (success, text/error_message)
+        Transcribe a voice message using OpenAI Whisper API.
+        Returns: Tuple[success: bool, text: str]
         """
-        start_time = time.time()
         try:
-            # Download voice message
-            voice = update.message.voice
-            file = await context.bot.get_file(voice.file_id)
+            # Get voice message file
+            voice_message = update.message.voice
+            if not voice_message:
+                return False, "No voice message found"
 
-            # Ensure unique filename with microsecond precision
-            timestamp = update.message.date.timestamp()
-            microsecond = int(time.time() * 1000000) % 1000000
-            voice_path = os.path.join(
-                self.temp_dir,
-                f"voice_{voice.file_id}_{timestamp}_{microsecond}.ogg",
-            )
-            temp_files.append(voice_path)
+            # Download voice file
+            voice_file = await context.bot.get_file(voice_message.file_id)
+            
+            # Save to temporary file
+            temp_path = self._get_temp_path("voice_message", ".ogg")
+            await voice_file.download_to_drive(temp_path)
+            temp_files.append(temp_path)
 
-            # Ensure parent directory exists with proper permissions
-            os.makedirs(os.path.dirname(voice_path), mode=0o777, exist_ok=True)
-
-            logger.info(f"Downloading voice message to {voice_path}")
-            try:
-                await file.download_to_drive(voice_path)
-                # Set file permissions
-                os.chmod(voice_path, 0o666)
-            except Exception as e:
-                logger.error(f"Error downloading voice file: {e}")
-                raise
-
-            if not os.path.exists(voice_path):
-                raise FileNotFoundError(
-                    f"Voice file was not downloaded to {voice_path}"
+            # Convert to text using Whisper API
+            with open(temp_path, "rb") as audio_file:
+                transcript = await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    lambda: openai.Audio.transcribe("whisper-1", audio_file)
                 )
 
-            logger.info("Starting transcription...")
-            # Transcribe
-            result = MODEL.transcribe(
-                voice_path, fp16=False
-            )  # Force FP32 to avoid warnings
-            transcribed_text = result["text"].strip()
+            return True, transcript.text
 
-            if not transcribed_text:
-                return (
-                    False,
-                    "Sorry, I couldn't understand the audio. Please try speaking clearly and avoid background noise.",
-                )
-
-            processing_time = time.time() - start_time
-            logger.info(
-                f"Successfully transcribed in {processing_time:.2f}s: {transcribed_text}"
-            )
-            return True, transcribed_text
-
-        except FileNotFoundError as e:
-            logger.error(f"File not found error: {e}")
-            return (
-                False,
-                "Sorry, there was an error saving your voice message. Please try again.",
-            )
         except Exception as e:
-            logger.error(f"Error transcribing voice message: {e}", exc_info=True)
-            return (
-                False,
-                "Sorry, there was an error processing your voice message. Please try again.",
-            )
-        finally:
-            # Force garbage collection after heavy processing
-            gc.collect()
+            logger.error(f"Error in transcribe_voice_message: {e}")
+            return False, str(e)
 
     @cleanup_file
     async def text_to_voice(
-        self, text: str, lang: str = "tr", temp_files=None
+            self, text: str, lang: str = "tr", temp_files=None, voice_name: str = None
     ) -> Tuple[bool, str]:
         """
-        Convert text to voice using gTTS.
-        Returns (success, file_path/error_message)
+        Convert text to voice using ElevenLabs.
+        Returns: Tuple[success: bool, file_path: str]
         """
-        start_time = time.time()
         temp_files = [] if not temp_files else temp_files
         try:
+            # Get the voice (cached)
+            voice_id = get_voice_by_name(voice_name)
+            if not voice_id:
+                raise RuntimeError(f"Could not find ElevenLabs voice '{voice_name or 'default'}'")
+
             # Generate audio file with unique name
-            voice_path = os.path.join(
-                self.temp_dir, f"response_{hash(text)}_{int(time.time())}.mp3"
-            )
+            voice_path = self._get_temp_path("voice_response", ".mp3")
             temp_files.append(voice_path)
 
             logger.info(f"Generating voice response to {voice_path}")
-            tts = gTTS(text=text, lang=lang, slow=False)
-            tts.save(voice_path)
 
-            if not os.path.exists(voice_path):
-                raise FileNotFoundError(
-                    f"Voice response file was not created at {voice_path}"
-                )
+            # Add natural pauses for more engaging speech
+            text = text.replace("!", "! ... ")
+            text = text.replace(".", ". ... ")
+            text = text.replace("?", "? ... ")
 
-            processing_time = time.time() - start_time
-            logger.info(f"Generated voice response in {processing_time:.2f}s")
+            # Generate audio with ElevenLabs
+            audio_stream = client.generate(
+                text=text,
+                voice=voice_id,  # voice parameter
+                model="eleven_multilingual_v2",
+                voice_settings=self.VOICE_SETTINGS,
+                stream=True,
+            )
+            # Save to file
+            with open(voice_path, "wb") as f:
+                for chunk in audio_stream:
+                    if chunk:
+                        f.write(chunk)
+
             return True, voice_path
 
         except Exception as e:
-            logger.error(f"Error converting text to voice: {e}", exc_info=True)
-            return False, "Sorry, there was an error generating the voice message."
-        finally:
-            # Force garbage collection after processing
-            gc.collect()
+            logger.error(f"Error in text_to_voice: {e}")
+            return False, str(e)
 
     async def handle_voice_message(self, update: Update, context: CallbackContext):
         """Handle incoming voice messages"""
-        chat_id = update.message.chat_id
+        chat_id = update.effective_chat.id
+        if not chat_id:
+            return
+
         start_time = time.time()
 
         logger.info(f"Received voice message from user {update.message.from_user.id}")
@@ -223,7 +185,7 @@ class VoiceHandler:
             await context.bot.send_chat_action(chat_id=chat_id, action="typing")
 
             # Transcribe voice
-            success, result = await self.transcribe_voice_message(update, context)
+            success, result = await self.transcribe_voice_message(update, context, [])
             if not success:
                 await update.message.reply_text(result)
                 return

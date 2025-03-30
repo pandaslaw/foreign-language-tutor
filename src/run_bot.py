@@ -32,6 +32,8 @@ import logging
 
 logger = getLogger(__name__)
 
+# Initialize voice handler for global use
+voice_handler = VoiceHandler()
 
 def log_memory_usage():
     """Log current memory usage"""
@@ -207,6 +209,36 @@ def get_current_scenario(user_data):
     return current_scenario
 
 
+async def say_text(update: Update, context: CallbackContext) -> None:
+    """Text-to-speech test command handler. Usage: /say [text]
+    If no text provided, uses a default greeting."""
+    
+    chat_id = update.effective_chat.id
+    if not chat_id:
+        return
+
+    # Get text from command arguments or use default
+    text = " ".join(context.args) if context.args else "Merhaba! Nasılsın? Bugün seninle Türkçe pratik yapalım!"
+    
+    try:
+        # Show recording indicator
+        await context.bot.send_chat_action(chat_id=chat_id, action="record_voice")
+        
+        # Generate voice
+        success, result = await voice_handler.text_to_voice(text, voice_name="Lily")
+        
+        if success:
+            # Send voice message
+            with open(result, "rb") as audio:
+                await context.bot.send_voice(chat_id=chat_id, voice=audio)
+        else:
+            await update.message.reply_text(f"Error generating voice: {result}")
+            
+    except Exception as e:
+        logger.error(f"Error in say_text: {e}")
+        await update.message.reply_text(f"Error: {str(e)}")
+
+
 if __name__ == "__main__":
     log_memory_usage()
     logger.info("~~~Send any message to a bot to start chatting~~~")
@@ -227,6 +259,7 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("send_logs", send_today_logs))
     app.add_handler(CommandHandler("send_all_logs", send_all_logs))
     app.add_handler(CommandHandler("trigger_morning", trigger_morning_scenario))
+    app.add_handler(CommandHandler("say", say_text))  # Add /say command handler
 
     # Add conversation handler
     conversation_handler = ConversationHandler(
@@ -245,9 +278,6 @@ if __name__ == "__main__":
             ASK_SCENARIO: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, ask_scenario)
             ],
-            # EXECUTE_SCENARIO: [
-            #     MessageHandler(filters.TEXT & ~filters.COMMAND, execute_scenario)
-            # ],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
     )
@@ -258,7 +288,7 @@ if __name__ == "__main__":
     )
     app.add_handler(
         MessageHandler(
-            filters.VOICE & ~filters.COMMAND, VoiceHandler().handle_voice_message
+            filters.VOICE & ~filters.COMMAND, voice_handler.handle_voice_message
         )
     )
 
