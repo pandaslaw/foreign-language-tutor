@@ -22,9 +22,13 @@ class LearningScheduler:
         self.bot = bot
         self.scheduler = AsyncIOScheduler()
         self.prompts = app_settings.SYSTEM_PROMPTS["daily_interactions"]
-        self.scheduler.start()
 
-    def _get_prompt_for_session(self, session_type: str, user_data: Dict) -> str:
+    async def start(self):
+        """Start the scheduler asynchronously"""
+        self.scheduler.start()
+        logger.info("Learning scheduler started successfully")
+
+    async def _get_prompt_for_session(self, session_type: str, user_data: Dict) -> str:
         """Get a personalized prompt for the session"""
         if session_type not in self.prompts:
             return ""
@@ -75,11 +79,11 @@ class LearningScheduler:
         
         return prompt
 
-    def schedule_daily_sessions(self, user_id: int):
+    async def schedule_daily_sessions(self, user_id: int):
         """Schedule personalized daily learning sessions"""
         try:
             # Get user's reminder preferences
-            reminders = UserSettings.get_reminder_preferences(user_id)
+            reminders = await UserSettings.get_reminder_preferences(user_id)
             
             # Schedule each reminder type
             for reminder_type, settings in reminders.items():
@@ -100,28 +104,47 @@ class LearningScheduler:
         except Exception as e:
             logger.error(f"Error scheduling sessions for user {user_id}: {e}")
 
-    async def _send_reminder(self, user_id: int, reminder_type: str):
-        """Send a reminder with personalized content"""
+    async def _send_reminder(self, user_id: int, session_type: str):
+        """Send a learning reminder to the user"""
         try:
-            # Get user data for personalization
-            user_data = await self._get_user_data(user_id)
-            if not user_data:
+            # Get user's settings
+            user_settings = await UserSettings.get_user_settings(user_id)
+            if not user_settings:
+                logger.error(f"No settings found for user {user_id}")
                 return
 
-            # Generate personalized message using LLM
-            prompt = self._get_prompt_for_session(reminder_type, user_data)
-            conversation_message = await load_history_and_generate_answer(user_id, "", prompt)
-
-            # Get learning content based on reminder type
-            if reminder_type == 'morning':
-                await self._morning_session(user_id, conversation_message)
-            elif reminder_type == 'afternoon':
-                await self._vocabulary_session(user_id, conversation_message)
-            elif reminder_type == 'evening':
-                await self._progress_review(user_id, conversation_message)
-                
+            # Get user's progress
+            progress = await ProgressTracker.get_user_progress(user_id)
+            streak = await ProgressTracker.get_learning_streak(user_id)
+            
+            # Get personalized prompt
+            prompt = await self._get_prompt_for_session(session_type, user_settings)
+            
+            # Create keyboard with practice options
+            keyboard = [
+                [InlineKeyboardButton("🎯 Start Practice", callback_data=f"scenario_start_{session_type}")],
+                [InlineKeyboardButton("⏰ Reschedule", callback_data=f"reminder_reschedule_{session_type}")]
+            ]
+            
+            # Add streak information
+            streak_msg = f"🔥 Current streak: {streak} days" if streak > 0 else ""
+            
+            # Send reminder message
+            await self.bot.send_message(
+                chat_id=user_id,
+                text=f"Time for your {session_type} practice session!\n\n{prompt}\n\n{streak_msg}",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            
+            logger.info(f"Sent {session_type} reminder to user {user_id}")
+            
         except Exception as e:
-            logger.error(f"Error sending {reminder_type} reminder to user {user_id}: {e}")
+            logger.error(f"Error sending reminder to user {user_id}: {e}")
+
+    async def stop(self):
+        """Stop the scheduler gracefully"""
+        self.scheduler.shutdown()
+        logger.info("Learning scheduler stopped")
 
     async def _get_user_data(self, user_id: int) -> Dict:
         """Get user data for personalization"""
@@ -164,7 +187,7 @@ class LearningScheduler:
     async def _morning_session(self, user_id: int, conversation_message: str):
         """Morning grammar practice session with conversation"""
         # Get practice suggestions
-        suggestions = ProgressTracker.get_practice_suggestions(user_id, limit=1)
+        suggestions = await ProgressTracker.get_practice_suggestions(user_id, limit=1)
         
         # Create keyboard based on available practice
         keyboard = []
@@ -191,7 +214,7 @@ class LearningScheduler:
     async def _vocabulary_session(self, user_id: int, conversation_message: str):
         """Afternoon vocabulary learning session with conversation"""
         # Get words due for review
-        words = VocabularyManager.get_words_for_review(user_id, limit=5)
+        words = await VocabularyManager.get_words_for_review(user_id, limit=5)
         
         # Send conversation message first
         await self.bot.send_message(
@@ -238,8 +261,8 @@ class LearningScheduler:
         )
         
         # Get progress data
-        streak = ProgressTracker.calculate_daily_streak(user_id)
-        progress = ProgressTracker.get_skill_progress(user_id)
+        streak = await ProgressTracker.calculate_daily_streak(user_id)
+        progress = await ProgressTracker.get_skill_progress(user_id)
         
         # Create progress message
         message = (

@@ -208,7 +208,7 @@ async def ask_goal(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     for reminder_type, settings in reminders.items():
         keyboard.append([
             InlineKeyboardButton(
-                f"{settings['emoji']} {reminder_type.title()} ({settings['time']})",
+                f"{reminder_type.title()} ({settings['time']})",
                 callback_data=f"reminder_{reminder_type}"
             )
         ])

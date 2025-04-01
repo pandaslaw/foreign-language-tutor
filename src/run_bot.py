@@ -1,5 +1,6 @@
 import logging
 import os
+import asyncio
 
 from dotenv import load_dotenv
 from telegram.ext import (
@@ -34,7 +35,8 @@ from src.handlers import (
     ASK_REMINDER_PREFS,
     CONFIRM_SETTINGS,
     ASK_SCENARIO,
-    EXECUTE_SCENARIO, show_settings_summary,
+    EXECUTE_SCENARIO,
+    show_settings_summary,
 )
 from src.admin_handlers import (
     health_check,
@@ -56,13 +58,19 @@ logger = logging.getLogger(__name__)
 
 
 async def post_init(application: Application) -> None:
-    """Post-initialization hook to set up bot commands"""
+    """Post-initialization hook to set up bot commands and scheduler"""
     await set_bot_commands(application.bot)
+    
+    # Start the scheduler
+    scheduler = LearningScheduler(application.bot)
+    await scheduler.start()
+    application.scheduler = scheduler
+    logger.info("Bot initialization completed")
 
 
-def main() -> None:
+async def main() -> None:
     """Start the bot."""
-    # Create the Application with post_init
+    # Create the Application
     application = (
         Application.builder()
         .token(app_settings.TELEGRAM_BOT_TOKEN)
@@ -70,9 +78,8 @@ def main() -> None:
         .build()
     )
 
-    # Create scheduler instance
-    scheduler = LearningScheduler(application.bot)
-    application.scheduler = scheduler
+    # Initialize the application
+    await application.initialize()
 
     # Add conversation handler for onboarding
     conv_handler = ConversationHandler(
@@ -99,30 +106,35 @@ def main() -> None:
             EXECUTE_SCENARIO: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message),
                 MessageHandler(filters.VOICE, handle_voice_message),
-                CallbackQueryHandler(handle_callback_query)
             ],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
         name="main_conversation",
-        persistent=True,
+        per_message=False,  # Explicitly set to false since we're using pattern matching
     )
 
     # Add handlers
     application.add_handler(conv_handler)
-    
-    # Add standalone command handlers
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("progress", progress))
     
-    # Add admin handlers
+    # Admin handlers
     application.add_handler(CommandHandler("health", health_check))
-    application.add_handler(CommandHandler("send_logs", send_today_logs))
-    application.add_handler(CommandHandler("send_all_logs", send_all_logs))
+    application.add_handler(CommandHandler("logs", send_today_logs))
+    application.add_handler(CommandHandler("all_logs", send_all_logs))
     application.add_handler(CommandHandler("trigger_morning", trigger_morning_scenario))
 
-    # Start the bot
-    application.run_polling()
+    try:
+        logger.info("Starting the bot...")
+        await application.start()
+        await application.updater.start_polling()
+        await asyncio.Future()
+    except (KeyboardInterrupt, SystemExit):
+        logger.error("Bot stopped.")
+    finally:
+        logger.info("Shutting down the bot...")
+
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
