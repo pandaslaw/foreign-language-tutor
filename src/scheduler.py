@@ -12,11 +12,18 @@ from apscheduler.triggers.cron import CronTrigger
 from telegram.ext import Application
 
 from src.dal import MessagesRepository, UsersRepository
+from src.dal.reminder_settings import ReminderSettings
 from src.utils import load_history_and_generate_answer
 
 logger = getLogger(__name__)
 
 class LearningScheduler:
+    REMINDER_TYPES = {
+        'morning': 'Morning practice 🌅 (9:00)',
+        'afternoon': 'Afternoon practice 🌞 (15:00)',
+        'evening': 'Evening practice 🌙 (22:00)'
+    }
+
     def __init__(self, app: Application):
         self.scheduler = BackgroundScheduler()
         self.app = app
@@ -259,21 +266,38 @@ class LearningScheduler:
                 },
             }
 
-    def start(self):
-        """Start the scheduler"""
+    async def start(self):
+        """Start the scheduler and restore all active reminders"""
+        # Start the scheduler
+        self.scheduler.start()
+        
+        # Restore all active reminders
+        await self._restore_reminders()
+        
+        logger.info("Learning scheduler started successfully")
+
+    async def _restore_reminders(self):
+        """Restore all active reminders from the database"""
         try:
-            if not self.scheduler.running:
-                self.scheduler.start()
-                logger.info("Learning scheduler started successfully")
-                # Print all scheduled jobs
-                jobs = self.scheduler.get_jobs()
-                logger.info(f"Current scheduled jobs: {len(jobs)}")
-                for job in jobs:
-                    logger.info(f"Job: {job.id} - Next run time: {job.next_run_time}")
-            else:
-                logger.warning("Scheduler is already running")
+            # Get all active reminders
+            reminders = await ReminderSettings.get_all_active_reminders()
+            
+            # Schedule each reminder
+            for reminder in reminders:
+                reminder_time = datetime.strptime(reminder['reminder_time'], '%H:%M').time()
+                self.scheduler.add_job(
+                    self._run_coroutine,
+                    CronTrigger(hour=reminder_time.hour, minute=reminder_time.minute, timezone=self.tz),
+                    args=[self.send_practice_message(reminder['user_id'], reminder['reminder_type'])],
+                    id=f"reminder_{reminder['reminder_type']}_{reminder['user_id']}",
+                    replace_existing=True,
+                    misfire_grace_time=300,
+                )
+                
+            logger.info(f"Restored {len(reminders)} active reminders")
+            
         except Exception as e:
-            logger.error(f"Error starting scheduler: {e}", exc_info=True)
+            logger.error(f"Error restoring reminders: {e}")
 
     def stop(self):
         """Stop the scheduler"""
@@ -285,3 +309,86 @@ class LearningScheduler:
                 logger.warning("Scheduler is not running")
         except Exception as e:
             logger.error(f"Error stopping scheduler: {e}", exc_info=True)
+
+    async def update_reminder_time(self, user_id: int, reminder_type: str, new_time: str) -> bool:
+        """Update reminder time and reschedule the job"""
+        try:
+            # Validate time format
+            try:
+                hour, minute = map(int, new_time.split(':'))
+                if not (0 <= hour <= 23 and 0 <= minute <= 59):
+                    raise ValueError("Invalid time")
+                new_time = f"{hour:02d}:{minute:02d}"
+            except ValueError:
+                logger.error(f"Invalid time format: {new_time}")
+                return False
+
+            # Update in database
+            success = await ReminderSettings.update_reminder(
+                user_id=user_id,
+                reminder_type=reminder_type,
+                reminder_time=new_time,
+                enabled=True
+            )
+            
+            if not success:
+                return False
+
+            # Remove existing job if any
+            job_id = f"reminder_{reminder_type}_{user_id}"
+            if job_id in self.scheduler.get_job_ids():
+                self.scheduler.remove_job(job_id)
+
+            # Schedule new job
+            job = self.scheduler.add_job(
+                self._run_coroutine,
+                CronTrigger(hour=hour, minute=minute, timezone=self.tz),
+                args=[self.send_practice_message(user_id, reminder_type)],
+                id=job_id,
+                replace_existing=True,
+                misfire_grace_time=300,
+            )
+            
+            logger.info(f"Updated {reminder_type} reminder for user {user_id} to {new_time}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error updating reminder time: {e}")
+            return False
+
+    async def schedule_daily_sessions(self, user_id: int):
+        """Schedule personalized daily learning sessions"""
+        try:
+            # Get user's reminder preferences
+            reminders = await ReminderSettings.get_user_reminders(user_id)
+            
+            # Schedule each reminder type
+            for reminder_type, settings in reminders.items():
+                if settings['enabled']:
+                    hour, minute = map(int, settings['time'].split(':'))
+                    job_id = f"reminder_{reminder_type}_{user_id}"
+                    
+                    # Remove existing job if any
+                    if job_id in self.scheduler.get_job_ids():
+                        self.scheduler.remove_job(job_id)
+                    
+                    # Schedule new job
+                    job = self.scheduler.add_job(
+                        self._run_coroutine,
+                        CronTrigger(hour=hour, minute=minute, timezone=self.tz),
+                        args=[self.send_practice_message(user_id, reminder_type)],
+                        id=job_id,
+                        replace_existing=True,
+                        misfire_grace_time=300,
+                    )
+                    
+                    logger.info(f"Scheduled {reminder_type} reminder for user {user_id} at {settings['time']}")
+                else:
+                    # Disable reminder in database and remove job
+                    await ReminderSettings.disable_reminder(user_id, reminder_type)
+                    job_id = f"reminder_{reminder_type}_{user_id}"
+                    if job_id in self.scheduler.get_job_ids():
+                        self.scheduler.remove_job(job_id)
+            
+        except Exception as e:
+            logger.error(f"Error scheduling sessions for user {user_id}: {e}")

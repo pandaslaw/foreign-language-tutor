@@ -1,6 +1,6 @@
 from logging import getLogger
 
-from telegram import ReplyKeyboardMarkup
+from telegram import ReplyKeyboardMarkup, BotCommand
 from telegram import Update
 from telegram.ext import (
     Application,
@@ -24,6 +24,7 @@ from src.admin_handlers import (
     send_all_logs,
     trigger_morning_scenario,
 )
+from src.reminder_handlers import get_reminder_handlers
 
 import os
 import psutil
@@ -239,6 +240,23 @@ async def say_text(update: Update, context: CallbackContext) -> None:
         await update.message.reply_text(f"Error: {str(e)}")
 
 
+def set_bot_commands(app) -> None:
+    """Set bot commands to show in Telegram GUI menu."""
+    commands = [
+        BotCommand("start", "Start learning Turkish "),
+        BotCommand("help", "Show help message "),
+        BotCommand("practice", "Start a practice session "),
+        BotCommand("progress", "View your learning progress "),
+        BotCommand("morning_reminder", "Set morning practice time "),
+        BotCommand("afternoon_reminder", "Set afternoon practice time "),
+        BotCommand("evening_reminder", "Set evening practice time "),
+        BotCommand("cancel", "Cancel current operation ")
+    ]
+    
+    app.bot.set_my_commands(commands)
+    logger.info("Bot commands have been set")
+
+
 if __name__ == "__main__":
     log_memory_usage()
     logger.info("~~~Send any message to a bot to start chatting~~~")
@@ -291,6 +309,13 @@ if __name__ == "__main__":
             filters.VOICE & ~filters.COMMAND, voice_handler.handle_voice_message
         )
     )
+
+    # Add reminder handlers
+    for handler in get_reminder_handlers():
+        app.add_handler(handler)
+
+    # Set bot commands
+    set_bot_commands(app)
 
     logger.info("Starting bot...")
     try:
