@@ -71,11 +71,6 @@ class ReminderSettings:
                         INSERT INTO reminder_settings (
                             user_id, reminder_type, reminder_time, enabled
                         ) VALUES (%s, %s, %s, %s)
-                        ON CONFLICT (user_id, reminder_type) 
-                        DO UPDATE SET
-                            reminder_time = EXCLUDED.reminder_time,
-                            enabled = EXCLUDED.enabled,
-                            updated_at = CURRENT_TIMESTAMP
                     """, (user_id, reminder_type, reminder_time, enabled))
                     conn.commit()
                     return True

@@ -1,326 +1,57 @@
+import asyncio
 from logging import getLogger
 
-from telegram import ReplyKeyboardMarkup, BotCommand
-from telegram import Update
 from telegram.ext import (
-    Application,
-    CommandHandler,
-    MessageHandler,
-    filters,
-    ConversationHandler,
-    CallbackContext,
-    ContextTypes,
     ApplicationBuilder,
 )
 
-from src.config import app_settings, SCENARIO_PROMPTS
-from src.dal import MessagesRepository, UsersRepository
-from src.utils import load_history_and_generate_answer, transcribe_audio
-from src.voice_handler import VoiceHandler
-from src.scheduler import LearningScheduler
 from src.admin_handlers import (
-    health_check,
-    send_today_logs,
-    send_all_logs,
-    trigger_morning_scenario,
+    register_admin_handlers,
 )
-from src.reminder_handlers import get_reminder_handlers
-
-import os
-import psutil
-import time
-import logging
+from src.config import app_settings
+from src.conversation_handlers import register_conversation_handlers, set_bot_commands
+from src.error_handlers import error_handler
+from src.reminder_handlers import register_reminder_handlers
+from src.scheduler import LearningScheduler
+from src.utils import log_memory_usage
 
 logger = getLogger(__name__)
 
-# Initialize voice handler for global use
-voice_handler = VoiceHandler()
 
-def log_memory_usage():
-    """Log current memory usage"""
-    process = psutil.Process(os.getpid())
-    mem_info = process.memory_info()
-    logger.info(
-        f"Memory usage - RSS: {mem_info.rss / 1024 / 1024:.1f}MB, VMS: {mem_info.vms / 1024 / 1024:.1f}MB"
-    )
+async def main():
+    """Main entry point for the bot."""
+    bot_app = ApplicationBuilder().token(app_settings.TELEGRAM_BOT_TOKEN).build()
 
+    # Initialize the application
+    await bot_app.initialize()
 
-ASK_NATIVE_LANGUAGE = 0
-ASK_TARGET_LANGUAGE = 1
-ASK_CURRENT_LEVEL = 2
-ASK_GOAL = 3
+    # Register all handlers
+    register_reminder_handlers(bot_app)
+    register_admin_handlers(bot_app)
+    register_conversation_handlers(bot_app)
+    await set_bot_commands(bot_app)
+    bot_app.add_error_handler(error_handler)
 
-ASK_SCENARIO = 4
-EXECUTE_SCENARIO = 5
-
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Start the conversation and ask user for their native language."""
-    user = update.message.from_user
-    tg_id = user.id
-
-    # Save user info if not exists
-    # UsersRepository.create_user(tg_id, user.username, user.first_name, user.last_name)
-
-    # Schedule daily practice sessions for this user
-    scheduler.schedule_daily_sessions(tg_id)
-    logger.info(f"Scheduled daily practice sessions for user {tg_id}")
-
-    reply_keyboard = [["English", "Turkish", "Spanish"]]
-    await update.message.reply_text(
-        "Hi! I'm your language learning assistant. " "What is your native language?",
-        reply_markup=ReplyKeyboardMarkup(
-            reply_keyboard,
-            one_time_keyboard=True,
-            input_field_placeholder="Your language?",
-        ),
-    )
-
-    return ASK_NATIVE_LANGUAGE
-
-
-async def ask_native_language(update: Update, context: CallbackContext) -> int:
-    user_response = update.message.text.strip()
-    context.user_data["native_language"] = user_response
-    await update.message.reply_text("Great! What language do you want to learn?")
-    return ASK_TARGET_LANGUAGE
-
-
-async def ask_target_language(update: Update, context: CallbackContext) -> int:
-    user_response = update.message.text.strip()
-    context.user_data["target_language"] = user_response
-    await update.message.reply_text(
-        "What is your current level? (Beginner, Intermediate, Advanced, Fluent)"
-    )
-    return ASK_CURRENT_LEVEL
-
-
-async def ask_current_level(update: Update, context: CallbackContext) -> int:
-    user_response = update.message.text.strip()
-    context.user_data["current_level"] = user_response
-    await update.message.reply_text(
-        "What is your goal? (e.g., reason for learning, timeframe, time available each week)"
-    )
-    return ASK_GOAL
-
-
-async def ask_goal(update: Update, context: CallbackContext) -> int:
-    user_response = update.message.text.strip()
-    context.user_data["learning_goal"] = user_response
-    # username, telegram_user_id, native_language, target_language,
-    # current_level, target_level, learning_goal, weekly_hours
-
-    # Save to database (make sure UsersRepository is defined elsewhere)
-    user_id = update.message.from_user.id
-    name = (
-        update.message.from_user.first_name
-    )  # Use first name instead of text for clarity
-    UsersRepository.create_user(name, user_id, **context.user_data)
-
-    await update.message.reply_text("Thanks! Your preferences have been saved.")
-
-    await update.message.reply_text(
-        "Welcome to your language learning session! From where would you like to start today?",
-        reply_markup=ReplyKeyboardMarkup(
-            [list(SCENARIO_PROMPTS.keys())], one_time_keyboard=True
-        ),
-    )
-    return ASK_SCENARIO
-
-
-async def ask_scenario(update: Update, context: CallbackContext) -> int:
-    """Function to handle user's scenario choice"""
-    log_memory_usage()
-    tg_id = update.message.from_user.id
-    scenario = update.message.text
-
-    logger.info(f"Set current scenario to '{scenario}'.")
-    context.user_data["current_scenario"] = (
-        scenario  # Store selected scenario in user data
-    )
-
-    logger.info(f"Call LLM for the first prompt in the selected scenario")
-    llm_response = load_history_and_generate_answer(tg_id, SCENARIO_PROMPTS[scenario])
-
-    if llm_response:
-        await update.message.reply_text(llm_response)
-
-        logger.info(f"Saving user input and llm's response.")
-        MessagesRepository.save_message(
-            tg_id, f"[Scenario: {scenario}]" + llm_response, is_llm=True
-        )
-
-    # Continue in the scenario
-    return EXECUTE_SCENARIO
-
-
-async def handle_text_message(
-    update: Update, context: CallbackContext, transcribed_text: str = None
-):
-    """Handle text messages or transcribed voice messages"""
-    start_time = time.time()
-    log_memory_usage()
-    tg_id = update.message.from_user.id
-
-    # Use transcribed text if provided, otherwise use the text message
-    message_text = transcribed_text or update.message.text
-
-    logger.info(f"Processing message from user '{tg_id}': {message_text}")
+    # Initialize and start the learning scheduler
+    scheduler = LearningScheduler(bot_app)
+    await scheduler.start()
+    logger.info("Learning scheduler started")
+    # Make scheduler accessible to handlers
+    bot_app.scheduler = scheduler
 
     try:
-        # Save message to history
-        current_scenario = get_current_scenario(context.user_data)
-        MessagesRepository.save_message(
-            tg_id, f"[Scenario: {current_scenario}] {message_text}"
-        )
-
-        # Generate response
-        response = load_history_and_generate_answer(tg_id, message_text)
-
-        # Save bot's response
-        MessagesRepository.save_message(tg_id, response, is_llm=True)
-
-        # Send response
-        await update.message.reply_text(response)
-
-        processing_time = time.time() - start_time
-        logger.info(f"Message processing took {processing_time:.2f} seconds")
-        log_memory_usage()
-
-    except Exception as e:
-        logger.error(f"Error processing message: {e}", exc_info=True)
-        await update.message.reply_text(
-            "I'm having trouble processing your message right now. Please try again in a moment."
-        )
-
-
-async def cancel(update: Update, context: CallbackContext) -> int:
-    """Function to stop conversation"""
-    await update.message.reply_text(
-        "Goodbye! Feel free to come back anytime for more practice."
-    )
-    return ConversationHandler.END
-
-
-def get_current_scenario(user_data):
-    if not user_data.get("current_scenario"):
-        user_data["current_scenario"] = "General Conversation"
-    current_scenario = user_data["current_scenario"]
-    logger.info(f"Current scenario is '{current_scenario}'.")
-    return current_scenario
-
-
-async def say_text(update: Update, context: CallbackContext) -> None:
-    """Text-to-speech test command handler. Usage: /say [text]
-    If no text provided, uses a default greeting."""
-    
-    chat_id = update.effective_chat.id
-    if not chat_id:
-        return
-
-    # Get text from command arguments or use default
-    text = " ".join(context.args) if context.args else "Merhaba! Nasılsın? Bugün seninle Türkçe pratik yapalım!"
-    
-    try:
-        # Show recording indicator
-        await context.bot.send_chat_action(chat_id=chat_id, action="record_voice")
-        
-        # Generate voice
-        success, result = await voice_handler.text_to_voice(text, voice_name="Lily")
-        
-        if success:
-            # Send voice message
-            with open(result, "rb") as audio:
-                await context.bot.send_voice(chat_id=chat_id, voice=audio)
-        else:
-            await update.message.reply_text(f"Error generating voice: {result}")
-            
-    except Exception as e:
-        logger.error(f"Error in say_text: {e}")
-        await update.message.reply_text(f"Error: {str(e)}")
-
-
-def set_bot_commands(app) -> None:
-    """Set bot commands to show in Telegram GUI menu."""
-    commands = [
-        BotCommand("start", "Start learning Turkish "),
-        BotCommand("help", "Show help message "),
-        BotCommand("practice", "Start a practice session "),
-        BotCommand("progress", "View your learning progress "),
-        BotCommand("morning_reminder", "Set morning practice time "),
-        BotCommand("afternoon_reminder", "Set afternoon practice time "),
-        BotCommand("evening_reminder", "Set evening practice time "),
-        BotCommand("cancel", "Cancel current operation ")
-    ]
-    
-    app.bot.set_my_commands(commands)
-    logger.info("Bot commands have been set")
+        logger.info("Starting the bot...")
+        await bot_app.start()
+        await bot_app.updater.start_polling()
+        await asyncio.Future()
+    except (KeyboardInterrupt, SystemExit):
+        logger.error("Bot stopped.")
+    finally:
+        logger.info("Shutting down the bot...")
+        scheduler.stop()
+        logger.info("Learning scheduler stopped")
 
 
 if __name__ == "__main__":
     log_memory_usage()
-    logger.info("~~~Send any message to a bot to start chatting~~~")
-
-    # Create the application and add the conversation handler
-    app = ApplicationBuilder().token(app_settings.TELEGRAM_BOT_TOKEN).build()
-
-    # Initialize and start the learning scheduler
-    scheduler = LearningScheduler(app)
-    scheduler.start()
-    logger.info("Learning scheduler started")
-
-    # Make scheduler accessible to handlers
-    app.scheduler = scheduler
-
-    # Add admin command handlers
-    app.add_handler(CommandHandler("health", health_check))
-    app.add_handler(CommandHandler("send_logs", send_today_logs))
-    app.add_handler(CommandHandler("send_all_logs", send_all_logs))
-    app.add_handler(CommandHandler("trigger_morning", trigger_morning_scenario))
-    app.add_handler(CommandHandler("say", say_text))  # Add /say command handler
-
-    # Add conversation handler
-    conversation_handler = ConversationHandler(
-        entry_points=[CommandHandler("start", start)],
-        states={
-            ASK_NATIVE_LANGUAGE: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, ask_native_language)
-            ],
-            ASK_TARGET_LANGUAGE: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, ask_target_language)
-            ],
-            ASK_CURRENT_LEVEL: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, ask_current_level)
-            ],
-            ASK_GOAL: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_goal)],
-            ASK_SCENARIO: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, ask_scenario)
-            ],
-        },
-        fallbacks=[CommandHandler("cancel", cancel)],
-    )
-
-    app.add_handler(conversation_handler)
-    app.add_handler(
-        MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message)
-    )
-    app.add_handler(
-        MessageHandler(
-            filters.VOICE & ~filters.COMMAND, voice_handler.handle_voice_message
-        )
-    )
-
-    # Add reminder handlers
-    for handler in get_reminder_handlers():
-        app.add_handler(handler)
-
-    # Set bot commands
-    set_bot_commands(app)
-
-    logger.info("Starting bot...")
-    try:
-        app.run_polling()
-    finally:
-        # Ensure scheduler is stopped when app exits
-        scheduler.stop()
-        logger.info("Learning scheduler stopped")
+    asyncio.run(main())

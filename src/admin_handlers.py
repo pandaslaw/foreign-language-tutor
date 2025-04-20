@@ -5,10 +5,11 @@ from logging import getLogger
 from typing import List
 
 from telegram import Update
-from telegram.ext import CallbackContext
+from telegram.ext import CallbackContext, Application, CommandHandler
 
 from src.config import app_settings
 from src.scheduler import LearningScheduler
+from src.voice_handler import VoiceHandler
 
 logger = getLogger(__name__)
 
@@ -16,6 +17,8 @@ logger = getLogger(__name__)
 LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs")
 os.makedirs(LOG_DIR, exist_ok=True)
 
+# Initialize voice handler for global use
+voice_handler = VoiceHandler()
 
 def get_today_logs() -> List[str]:
     """Collects all file paths of log files for today."""
@@ -124,3 +127,42 @@ async def trigger_morning_scenario(update: Update, context: CallbackContext) -> 
             await update.message.reply_text(f"{error_msg}. Please try again later.")
     else:
         logger.warning(f"User {user_id} not authorized to trigger morning scenario.")
+
+
+async def say_text(update: Update, context: CallbackContext) -> None:
+    """Text-to-speech test command handler. Usage: /say [text]
+    If no text provided, uses a default greeting."""
+
+    chat_id = update.effective_chat.id
+    if not chat_id:
+        return
+
+    # Get text from command arguments or use default
+    text = " ".join(context.args) if context.args else "Merhaba! Nasılsın? Bugün seninle Türkçe pratik yapalım!"
+
+    try:
+        # Show recording indicator
+        await context.bot.send_chat_action(chat_id=chat_id, action="record_voice")
+
+        # Generate voice
+        success, result = await voice_handler.text_to_voice(text, voice_name="Lily")
+
+        if success:
+            # Send voice message
+            with open(result, "rb") as audio:
+                await context.bot.send_voice(chat_id=chat_id, voice=audio)
+        else:
+            await update.message.reply_text(f"Error generating voice: {result}")
+
+    except Exception as e:
+        logger.error(f"Error in say_text: {e}")
+        await update.message.reply_text(f"Error: {str(e)}")
+
+
+def register_admin_handlers(app: Application):
+    """Register all admin handlers."""
+    app.add_handler(CommandHandler("health", health_check))
+    app.add_handler(CommandHandler("send_logs", send_today_logs))
+    app.add_handler(CommandHandler("send_all_logs", send_all_logs))
+    app.add_handler(CommandHandler("trigger_morning", trigger_morning_scenario))
+    app.add_handler(CommandHandler("say", say_text))  # Add /say command handler

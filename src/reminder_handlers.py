@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Dict
 
 from telegram import Update
-from telegram.ext import ContextTypes, CommandHandler
+from telegram.ext import ContextTypes, CommandHandler, Application
 
 from src.scheduler import LearningScheduler
 
@@ -28,7 +28,7 @@ async def set_reminder(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         if reminder_type not in valid_types:
             await update.message.reply_text(
                 f"❌ Invalid reminder type. Available types are:\n" + 
-                "\n".join([f"/{k}_reminder HH:MM" for k in valid_types.keys()])
+                "\n".join([f"/{k}_reminder HH:MM" for k in valid_types])
             )
             return
 
@@ -49,7 +49,7 @@ async def set_reminder(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         
         if success:
             await update.message.reply_text(
-                f"✅ {valid_types[reminder_type]} set to {time_str}\n"
+                f"✅ {reminder_type}_reminder set to {time_str}\n"
                 f"I'll remind you every day at this time!"
             )
         else:
@@ -69,3 +69,9 @@ def get_reminder_handlers():
         CommandHandler(f"{reminder_type}_reminder", set_reminder)
         for reminder_type in LearningScheduler.REMINDER_TYPES.keys()
     ]
+
+
+def register_reminder_handlers(app: Application):
+    """Register all reminder handlers."""
+    for handler in get_reminder_handlers():
+        app.add_handler(handler)

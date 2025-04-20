@@ -1,16 +1,27 @@
 import datetime as dt
-import time
 import gc
+import os
+import re
+import time
 from logging import getLogger
 from typing import List, Union, Dict
-import re
 
+import psutil
 from openai import OpenAI
 
 from src.config import app_settings
 from src.dal import MessagesRepository, UsersRepository
 
 logger = getLogger(__name__)
+
+
+def log_memory_usage():
+    """Log current memory usage"""
+    process = psutil.Process(os.getpid())
+    mem_info = process.memory_info()
+    logger.info(
+        f"Memory usage - RSS: {mem_info.rss / 1024 / 1024:.1f}MB, VMS: {mem_info.vms / 1024 / 1024:.1f}MB"
+    )
 
 
 def clean_llm_response(text: str) -> str:
@@ -29,9 +40,9 @@ def clean_llm_response(text: str) -> str:
 
 
 def load_history_and_generate_answer(
-    user_id: int,
-    user_input: str,
-    assistant_prompt: str = None,
+        user_id: int,
+        user_input: str,
+        assistant_prompt: str = None,
 ) -> str:
     """
     Loads message history from DB, prepares the system prompt by enriching it with full message history
@@ -69,7 +80,7 @@ def load_history_and_generate_answer(
 
 
 def generate_answer(
-    user_input: str, system_prompt: str = None, assistant_prompt: str = None
+        user_input: str, system_prompt: str = None, assistant_prompt: str = None
 ) -> str:
     """
     Calls LLM using system prompt and user's text message.
@@ -86,16 +97,16 @@ def generate_answer(
 
         # Update system prompt with current time and formatting instructions
         system_prompt_updated = (
-            f"Just in case someone asks you about what day is it today, "
-            f"you know that current time is {start_time} and you answer the name "
-            f"of a day of a week initially and say full date only "
-            f"if you are explicitly asked to do this.\n\n"
-            f"IMPORTANT: Do not use any markdown formatting in your responses. "
-            f"Specifically:\n"
-            f"- Do not use asterisks (*) or backticks (`) for emphasis\n"
-            f"- Do not use hashtags (#) for headers\n"
-            f"- Do not use any other special formatting characters\n"
-            f"Just write plain text.\n\n" + system_prompt
+                f"Just in case someone asks you about what day is it today, "
+                f"you know that current time is {start_time} and you answer the name "
+                f"of a day of a week initially and say full date only "
+                f"if you are explicitly asked to do this.\n\n"
+                f"IMPORTANT: Do not use any markdown formatting in your responses. "
+                f"Specifically:\n"
+                f"- Do not use asterisks (*) or backticks (`) for emphasis\n"
+                f"- Do not use hashtags (#) for headers\n"
+                f"- Do not use any other special formatting characters\n"
+                f"Just write plain text.\n\n" + system_prompt
         )
 
         if assistant_prompt:
@@ -152,9 +163,9 @@ def generate_answer(
 
 
 def update_system_prompt(
-    messages: List[Dict[str, Union[str, dt.datetime]]],
-    system_prompt: str = app_settings.SYSTEM_PROMPT,
-    user_data=None,
+        messages: List[Dict[str, Union[str, dt.datetime]]],
+        system_prompt: str = app_settings.SYSTEM_PROMPT,
+        user_data=None,
 ) -> str:
     """Adds context (previous messages from the chat) to the system prompt."""
 
@@ -175,7 +186,7 @@ def update_system_prompt(
 
 
 def summarize_history(
-    messages: List[Dict[str, Union[str, dt.datetime]]], n_last_messages: int = None
+        messages: List[Dict[str, Union[str, dt.datetime]]], n_last_messages: int = None
 ) -> str:
     """
     Condense older messages to reduce token usage. Returns a string summary.
