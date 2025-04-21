@@ -24,7 +24,7 @@ async def set_reminder(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         scheduler: LearningScheduler = context.application.scheduler
         
         # Validate reminder type
-        valid_types = scheduler.REMINDER_TYPES.keys()
+        valid_types = scheduler.REMINDER_PROMPTS.keys()
         if reminder_type not in valid_types:
             await update.message.reply_text(
                 f"❌ Invalid reminder type. Available types are:\n" + 
@@ -67,7 +67,7 @@ def get_reminder_handlers():
     """Get all reminder-related command handlers"""
     return [
         CommandHandler(f"{reminder_type}_reminder", set_reminder)
-        for reminder_type in LearningScheduler.REMINDER_TYPES.keys()
+        for reminder_type in LearningScheduler.REMINDER_PROMPTS.keys()
     ]
 
 

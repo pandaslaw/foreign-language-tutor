@@ -12,16 +12,52 @@ from telegram.ext import Application
 from src.config import app_settings
 from src.dal.reminder_settings import ReminderSettings
 from src.dal.users_repo import UsersRepository
+from src.utils import generate_answer
 
 logger = logging.getLogger(__name__)
 
 class LearningScheduler:
     """Handles scheduling and managing learning reminders."""
     
-    REMINDER_TYPES = {
-        'morning': 'Morning practice 🌅 (9:00)',
-        'afternoon': 'Afternoon practice 🌞 (15:00)',
-        'evening': 'Evening practice 🌙 (22:00)'
+    REMINDER_PROMPTS = {
+        'morning': """Generate a warm and engaging morning message for a language learning student. The message should:
+1. Start with a warm Turkish greeting
+2. Include a "Quote of the Day" in both Turkish and Russian that:
+   - Is inspiring and motivational
+   - Relates to learning, growth, or daily life
+   - Uses simple Turkish that an A1 level student can understand
+3. Ask 2-3 engaging questions about:
+   - Morning routine
+   - Plans for the day
+   - Current feelings or mood
+4. End with an encouraging note about practicing Turkish
+
+Make the tone personal and caring, like a supportive friend. Use emojis naturally.
+The entire message should be in Turkish except for the Russian translation of the quote.""",
+
+        'afternoon': """Generate a friendly afternoon check-in message for a language learning student. The message should:
+1. Start with a warm Turkish greeting
+2. Ask 2-3 engaging questions about:
+   - Lunch or current activities
+   - How their day is going
+   - Plans for the rest of the day
+3. Include some encouraging words about language practice
+4. Keep the tone casual and friendly
+
+Make it feel like a natural conversation with a caring friend. Use emojis naturally.
+The entire message should be in Turkish.""",
+
+        'evening': """Generate a cozy evening reflection message for a language learning student. The message should:
+1. Start with a warm Turkish greeting
+2. Ask 2-3 engaging questions about:
+   - Highlights of their day
+   - Something they learned
+   - Plans for tomorrow
+3. Include some words of encouragement about their progress
+4. End with a gentle reminder about tomorrow's practice
+
+Make it feel like a warm evening chat with a close friend. Use emojis naturally.
+The entire message should be in Turkish."""
     }
 
     def __init__(self, application: Application):
@@ -153,64 +189,20 @@ class LearningScheduler:
                 logger.info(f"Reminder {reminder_type} disabled for user {user_id}")
                 return
 
-            # Get exercise content based on time of day
-            greeting = ""
-            exercises = []
-            
-            if reminder_type == 'morning':
-                greeting = "Günaydın! ☀️ Good morning!"
-                exercises = [
-                    "🌅 Let's start with morning routines:",
-                    "Q: How did you sleep? (Nasıl uyudun?)",
-                    "Q: What did you have for breakfast? (Kahvaltıda ne yedin?)",
-                    "Q: What are your plans for today? (Bugün ne yapacaksın?)",
-                    "\nUseful phrases:",
-                    "- İyi uyudum = I slept well",
-                    "- Kahve içtim = I drank coffee",
-                    "- Çalışacağım = I will work"
-                ]
-            elif reminder_type == 'afternoon':
-                greeting = "İyi günler! 🌞 Good afternoon!"
-                exercises = [
-                    "🍽️ Let's practice daily activities:",
-                    "Q: What did you eat for lunch? (Öğle yemeğinde ne yedin?)",
-                    "Q: What are you doing now? (Şu an ne yapıyorsun?)",
-                    "Q: How is your day going? (Günün nasıl geçiyor?)",
-                    "\nUseful phrases:",
-                    "- Çorba içtim = I had soup",
-                    "- Çalışıyorum = I am working",
-                    "- Güzel geçiyor = It's going well"
-                ]
-            else:  # evening
-                greeting = "İyi akşamlar! 🌙 Good evening!"
-                exercises = [
-                    "🌆 Let's review your day:",
-                    "Q: What did you do today? (Bugün ne yaptın?)",
-                    "Q: What will you do tomorrow? (Yarın ne yapacaksın?)",
-                    "Q: Did you learn something new? (Yeni bir şey öğrendin mi?)",
-                    "\nUseful phrases:",
-                    "- Alışveriş yaptım = I went shopping",
-                    "- Dinleneceğim = I will rest",
-                    "- Evet, öğrendim = Yes, I learned"
-                ]
-
-            # Combine message parts
-            message = (
-                f"{greeting}\n\n"
-                f"{self.REMINDER_TYPES[reminder_type]}\n\n"
-                f"{chr(10).join(exercises)}\n\n"
-                "Reply with your answers in Turkish! 🇹🇷\n"
-                "I'll check your grammar and help you improve! ✨"
+            # Generate personalized message using LLM
+            message = generate_answer(
+                user_input=self.REMINDER_PROMPTS[reminder_type],
+                system_prompt=app_settings.SYSTEM_PROMPT
             )
 
-            # Send exercise
+            # Send message
             await self.application.bot.send_message(
                 chat_id=user_id,
                 text=message,
-                parse_mode='HTML'
+                parse_mode='Markdown'
             )
             
-            logger.info(f"Sent {reminder_type} exercises to user {user_id}")
+            logger.info(f"Sent {reminder_type} conversation starter to user {user_id}")
             
         except Exception as e:
             logger.error(f"Error sending reminder to user {user_id}: {e}")

@@ -27,7 +27,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
     
     try:
         # Check if user exists
-        existing_user = await UsersRepository.get_user_by_id(user_id)
+        existing_user = UsersRepository.get_user_by_id(user_id)
         
         if existing_user:
             # User exists, show welcome back message
@@ -123,14 +123,14 @@ async def ask_goal(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
     
     # Get scheduler instance
     scheduler: LearningScheduler = context.application.scheduler
-    reminder_types = scheduler.get_reminder_types()
+    reminder_types = scheduler.REMINDER_PROMPTS.keys()
     
     # Create keyboard for reminder preferences
     keyboard = []
-    for reminder_type, display_name in reminder_types.items():
+    for reminder_type in reminder_types:
         keyboard.append([
             InlineKeyboardButton(
-                f"✅ {display_name}", 
+                f"✅ {reminder_type}",
                 callback_data=f"reminder_{reminder_type}_on"
             )
         ])

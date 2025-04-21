@@ -119,7 +119,7 @@ async def trigger_morning_scenario(update: Update, context: CallbackContext) -> 
             scheduler = context.application.scheduler
 
             # Reuse the scheduler's send_practice_message
-            await scheduler.send_practice_message(user_id, "morning")
+            await scheduler._send_reminder(user_id, "morning")
             logger.info(f"Morning scenario triggered manually by admin {user_id}")
         except Exception as e:
             error_msg = "Error triggering morning scenario"
