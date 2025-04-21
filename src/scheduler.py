@@ -2,6 +2,7 @@ import logging
 import random
 from datetime import datetime, time
 from typing import Dict, Optional
+import asyncio
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -189,23 +190,72 @@ The entire message should be in Turkish."""
                 logger.info(f"Reminder {reminder_type} disabled for user {user_id}")
                 return
 
+            # Show typing indicator while generating message
+            await self.application.bot.send_chat_action(chat_id=user_id, action="typing")
+            
             # Generate personalized message using LLM
             message = generate_answer(
                 user_input=self.REMINDER_PROMPTS[reminder_type],
                 system_prompt=app_settings.SYSTEM_PROMPT
             )
 
-            # Send message
-            await self.application.bot.send_message(
-                chat_id=user_id,
-                text=message,
-                parse_mode='Markdown'
-            )
+            # Split message into logical parts
+            # Common separators in LLM responses
+            separators = [
+                "\n\nСмысл:",
+                "\n\nИсправления:",
+                "\n\nКак сказать правильно:",
+                "\n\nПолезные фразы:",
+                "\n\nПример:",
+            ]
+
+            parts = [message]
+            for sep in separators:
+                new_parts = []
+                for part in parts:
+                    split = part.split(sep)
+                    if len(split) > 1:
+                        for i, s in enumerate(split):
+                            if i > 0:
+                                s = sep.lstrip('\n') + s
+                            if s.strip():
+                                new_parts.append(s.strip())
+                    else:
+                        new_parts.append(part)
+                parts = new_parts
+
+            # Send each part with a small delay and typing indicator
+            last_message = None
+            for part in parts:
+                # Show typing indicator proportional to message length
+                typing_time = min(max(len(part) / 100, 1), 3)  # between 1-3 seconds
+                await self.application.bot.send_chat_action(chat_id=user_id, action="typing")
+                await asyncio.sleep(typing_time)
+                last_message = await self.application.bot.send_message(
+                    chat_id=user_id,
+                    text=part,
+                    parse_mode='Markdown'
+                )
+                # Small delay between messages for natural flow
+                await asyncio.sleep(0.5)
             
             logger.info(f"Sent {reminder_type} conversation starter to user {user_id}")
+            return last_message
             
         except Exception as e:
             logger.error(f"Error sending reminder to user {user_id}: {e}")
+            return None
+
+    async def _send_reminder_with_reaction(self, user_id: int, reminder_type: str):
+        """Send a reminder and add a reaction to encourage interaction."""
+        message = await self._send_reminder(user_id, reminder_type)
+        if message:
+            try:
+                # Add a friendly reaction to encourage interaction
+                reactions = ["👋", "🌟", "✨", "🎯", "💫"]
+                await message.react(random.choice(reactions))
+            except Exception as e:
+                logger.error(f"Error adding reaction: {e}")
 
     async def disable_reminder(self, user_id: int, reminder_type: str) -> bool:
         """Disable a specific reminder."""

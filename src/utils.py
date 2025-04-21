@@ -95,18 +95,13 @@ def generate_answer(
         model = app_settings.LANGUAGE_MODEL
         system_prompt = system_prompt if system_prompt else app_settings.SYSTEM_PROMPT
 
-        # Update system prompt with current time and formatting instructions
+        # Update system prompt with formatting instructions
         system_prompt_updated = (
-                f"Just in case someone asks you about what day is it today, "
-                f"you know that current time is {start_time} and you answer the name "
-                f"of a day of a week initially and say full date only "
-                f"if you are explicitly asked to do this.\n\n"
-                f"IMPORTANT: Do not use any markdown formatting in your responses. "
-                f"Specifically:\n"
-                f"- Do not use asterisks (*) or backticks (`) for emphasis\n"
-                f"- Do not use hashtags (#) for headers\n"
-                f"- Do not use any other special formatting characters\n"
-                f"Just write plain text.\n\n" + system_prompt
+            f"IMPORTANT FORMATTING RULES:\n"
+            f"1. Do not use any markdown formatting in your responses\n"
+            f"2. Do not add signatures or formal letter endings\n"
+            f"3. Do not mention the current date or time unless specifically asked\n"
+            f"4. Keep responses conversational and natural\n\n" + system_prompt
         )
 
         if assistant_prompt:
