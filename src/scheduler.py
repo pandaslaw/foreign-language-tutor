@@ -14,14 +14,16 @@ from src.config import app_settings
 from src.dal.reminder_settings import ReminderSettings
 from src.dal.users_repo import UsersRepository
 from src.utils import generate_answer
+import datetime as dt
 
 logger = logging.getLogger(__name__)
 
+
 class LearningScheduler:
     """Handles scheduling and managing learning reminders."""
-    
+
     REMINDER_PROMPTS = {
-        'morning': """Generate a warm and engaging morning message for a language learning student. The message should:
+        "morning": """Generate a warm and engaging morning message for a language learning student. The message should:
 1. Start with a warm Turkish greeting
 2. Include a "Quote of the Day" in both Turkish and Russian that:
    - Is inspiring and motivational
@@ -35,8 +37,7 @@ class LearningScheduler:
 
 Make the tone personal and caring, like a supportive friend. Use emojis naturally.
 The entire message should be in Turkish except for the Russian translation of the quote.""",
-
-        'afternoon': """Generate a friendly afternoon check-in message for a language learning student. The message should:
+        "afternoon": """Generate a friendly afternoon check-in message for a language learning student. The message should:
 1. Start with a warm Turkish greeting
 2. Ask 2-3 engaging questions about:
    - Lunch or current activities
@@ -47,8 +48,7 @@ The entire message should be in Turkish except for the Russian translation of th
 
 Make it feel like a natural conversation with a caring friend. Use emojis naturally.
 The entire message should be in Turkish.""",
-
-        'evening': """Generate a cozy evening reflection message for a language learning student. The message should:
+        "evening": """Generate a cozy evening reflection message for a language learning student. The message should:
 1. Start with a warm Turkish greeting
 2. Ask 2-3 engaging questions about:
    - Highlights of their day
@@ -58,7 +58,7 @@ The entire message should be in Turkish.""",
 4. End with a gentle reminder about tomorrow's practice
 
 Make it feel like a warm evening chat with a close friend. Use emojis naturally.
-The entire message should be in Turkish."""
+The entire message should be in Turkish.""",
     }
 
     def __init__(self, application: Application):
@@ -85,39 +85,36 @@ The entire message should be in Turkish."""
         try:
             # Get all active reminders
             reminders = await ReminderSettings.get_all_active_reminders()
-            
+
             # Schedule each reminder
             for reminder in reminders:
                 await self._schedule_reminder(
-                    user_id=reminder['user_id'],
-                    reminder_type=reminder['reminder_type'],
-                    reminder_time=reminder['reminder_time']
+                    user_id=reminder["user_id"],
+                    reminder_type=reminder["reminder_type"],
+                    reminder_time=reminder["reminder_time"],
                 )
-                
+
             logger.info(f"Restored {len(reminders)} active reminders")
-            
+
         except Exception as e:
             logger.error(f"Error restoring reminders: {e}")
 
     async def _schedule_reminder(
-        self, 
-        user_id: int, 
-        reminder_type: str, 
-        reminder_time: str
+        self, user_id: int, reminder_type: str, reminder_time: dt.time
     ) -> Optional[Job]:
         """Schedule a single reminder job."""
         try:
             # Parse time
-            hour, minute = map(int, reminder_time.split(':'))
-            
+            hour, minute = reminder_time.hour, reminder_time.minute
+
             # Generate job ID
             job_id = self._get_job_id(user_id, reminder_type)
-            
+
             # Remove existing job if any
             if job_id in self.jobs:
                 self.scheduler.remove_job(job_id)
                 del self.jobs[job_id]
-            
+
             # Create new job
             job = self.scheduler.add_job(
                 self._send_reminder,
@@ -125,30 +122,29 @@ The entire message should be in Turkish."""
                 args=[user_id, reminder_type],
                 id=job_id,
                 replace_existing=True,
-                misfire_grace_time=300  # 5 minutes grace time
+                misfire_grace_time=300,  # 5 minutes grace time
             )
-            
+
             # Store job reference
             self.jobs[job_id] = job
-            
-            logger.info(f"Scheduled {reminder_type} reminder for user {user_id} at {reminder_time}")
+
+            logger.info(
+                f"Scheduled {reminder_type} reminder for user {user_id} at {reminder_time}"
+            )
             return job
-            
+
         except Exception as e:
             logger.error(f"Error scheduling reminder: {e}")
             return None
 
     async def update_reminder_time(
-        self, 
-        user_id: int, 
-        reminder_type: str, 
-        new_time: str
+        self, user_id: int, reminder_type: str, new_time: str
     ) -> bool:
         """Update reminder time and reschedule the job."""
         try:
             # Validate time format
             try:
-                hour, minute = map(int, new_time.split(':'))
+                hour, minute = map(int, new_time.split(":"))
                 if not (0 <= hour <= 23 and 0 <= minute <= 59):
                     raise ValueError("Invalid time")
                 new_time = f"{hour:02d}:{minute:02d}"
@@ -161,9 +157,9 @@ The entire message should be in Turkish."""
                 user_id=user_id,
                 reminder_type=reminder_type,
                 reminder_time=new_time,
-                enabled=True
+                enabled=True,
             )
-            
+
             if not success:
                 return False
 
@@ -186,17 +182,19 @@ The entire message should be in Turkish."""
 
             # Get reminder settings to confirm it's still enabled
             settings = await ReminderSettings.get_user_reminders(user_id)
-            if not settings.get(reminder_type, {}).get('enabled', False):
+            if not settings.get(reminder_type, {}).get("enabled", False):
                 logger.info(f"Reminder {reminder_type} disabled for user {user_id}")
                 return
 
             # Show typing indicator while generating message
-            await self.application.bot.send_chat_action(chat_id=user_id, action="typing")
-            
+            await self.application.bot.send_chat_action(
+                chat_id=user_id, action="typing"
+            )
+
             # Generate personalized message using LLM
             message = generate_answer(
                 user_input=self.REMINDER_PROMPTS[reminder_type],
-                system_prompt=app_settings.SYSTEM_PROMPT
+                system_prompt=app_settings.SYSTEM_PROMPT,
             )
 
             # Split message into logical parts
@@ -217,7 +215,7 @@ The entire message should be in Turkish."""
                     if len(split) > 1:
                         for i, s in enumerate(split):
                             if i > 0:
-                                s = sep.lstrip('\n') + s
+                                s = sep.lstrip("\n") + s
                             if s.strip():
                                 new_parts.append(s.strip())
                     else:
@@ -229,19 +227,19 @@ The entire message should be in Turkish."""
             for part in parts:
                 # Show typing indicator proportional to message length
                 typing_time = min(max(len(part) / 100, 1), 3)  # between 1-3 seconds
-                await self.application.bot.send_chat_action(chat_id=user_id, action="typing")
+                await self.application.bot.send_chat_action(
+                    chat_id=user_id, action="typing"
+                )
                 await asyncio.sleep(typing_time)
                 last_message = await self.application.bot.send_message(
-                    chat_id=user_id,
-                    text=part,
-                    parse_mode='Markdown'
+                    chat_id=user_id, text=part, parse_mode="Markdown"
                 )
                 # Small delay between messages for natural flow
                 await asyncio.sleep(0.5)
-            
+
             logger.info(f"Sent {reminder_type} conversation starter to user {user_id}")
             return last_message
-            
+
         except Exception as e:
             logger.error(f"Error sending reminder to user {user_id}: {e}")
             return None
@@ -270,9 +268,9 @@ The entire message should be in Turkish."""
             if job_id in self.jobs:
                 self.scheduler.remove_job(job_id)
                 del self.jobs[job_id]
-                
+
             return True
-            
+
         except Exception as e:
             logger.error(f"Error disabling reminder: {e}")
             return False
