@@ -6,6 +6,7 @@ from src.database import get_db_connection
 
 logger = logging.getLogger(__name__)
 
+
 class ReminderSettings:
     """Repository for user reminder settings."""
 
@@ -15,17 +16,19 @@ class ReminderSettings:
         try:
             with get_db_connection() as conn:
                 with conn.cursor() as cur:
-                    cur.execute("""
+                    cur.execute(
+                        """
                         SELECT user_id, reminder_type, reminder_time, enabled
                         FROM reminder_settings
                         WHERE enabled = true
-                    """)
+                    """
+                    )
                     return [
                         {
-                            'user_id': row[0],
-                            'reminder_type': row[1],
-                            'reminder_time': row[2],
-                            'enabled': row[3]
+                            "user_id": row[0],
+                            "reminder_type": row[1],
+                            "reminder_time": row[2],
+                            "enabled": row[3],
                         }
                         for row in cur.fetchall()
                     ]
@@ -39,17 +42,20 @@ class ReminderSettings:
         try:
             with get_db_connection() as conn:
                 with conn.cursor() as cur:
-                    cur.execute("""
+                    cur.execute(
+                        """
                         SELECT reminder_type, reminder_time, enabled
                         FROM reminder_settings
                         WHERE user_id = %s
-                    """, (user_id,))
-                    
+                    """,
+                        (user_id,),
+                    )
+
                     reminders = {}
                     for row in cur.fetchall():
                         reminders[row[0]] = {
-                            'time': row[1].strftime('%H:%M'),
-                            'enabled': row[2]
+                            "time": row[1].strftime("%H:%M"),
+                            "enabled": row[2],
                         }
                     return reminders
         except Exception as e:
@@ -58,20 +64,20 @@ class ReminderSettings:
 
     @staticmethod
     async def update_reminder(
-        user_id: int,
-        reminder_type: str,
-        reminder_time: str,
-        enabled: bool = True
+        user_id: int, reminder_type: str, reminder_time: str, enabled: bool = True
     ) -> bool:
         """Update or create a reminder setting."""
         try:
             with get_db_connection() as conn:
                 with conn.cursor() as cur:
-                    cur.execute("""
+                    cur.execute(
+                        """
                         INSERT INTO reminder_settings (
                             user_id, reminder_type, reminder_time, enabled
                         ) VALUES (%s, %s, %s, %s)
-                    """, (user_id, reminder_type, reminder_time, enabled))
+                    """,
+                        (user_id, reminder_type, reminder_time, enabled),
+                    )
                     conn.commit()
                     return True
         except Exception as e:
@@ -84,12 +90,15 @@ class ReminderSettings:
         try:
             with get_db_connection() as conn:
                 with conn.cursor() as cur:
-                    cur.execute("""
+                    cur.execute(
+                        """
                         UPDATE reminder_settings
                         SET enabled = false,
                             updated_at = CURRENT_TIMESTAMP
                         WHERE user_id = %s AND reminder_type = %s
-                    """, (user_id, reminder_type))
+                    """,
+                        (user_id, reminder_type),
+                    )
                     conn.commit()
                     return True
         except Exception as e:

@@ -15,22 +15,22 @@ logger = getLogger(__name__)
 
 class AppSettings(BaseSettings):
     """Application settings."""
-    
+
     # Bot settings
     # BOT_TOKEN: str
     ADMIN_USER_IDS: list[int]
-    
+
     # Database settings
     DB_CONNECTION_STRING: str
-    
+
     # Voice API settings
     # OPENAI_API_KEY: str
     ELEVENLABS_API_KEY: str
-    
+
     # Voice settings
     ELEVENLABS_VOICE_ID: str = "Leyla"  # Default voice name
     VOICE_STYLE: str = "Empathetic"  # Default style for voice generation
-    
+
     # OpenRouter API settings
     OPENROUTER_API_KEY: str
 
@@ -43,6 +43,7 @@ class AppSettings(BaseSettings):
 
     class Config:
         """Pydantic config."""
+
         env_file = ".env"
         env_file_encoding = "utf-8"
 

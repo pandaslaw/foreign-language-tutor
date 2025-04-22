@@ -10,32 +10,33 @@ from src.scheduler import LearningScheduler
 
 logger = logging.getLogger(__name__)
 
+
 async def set_reminder(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle setting reminder time commands like /morning_reminder 09:30"""
     try:
         # Get user ID
         user_id = update.effective_user.id
-        
+
         # Get reminder type from command
         command = update.message.text.split()[0][1:]  # Remove leading /
-        reminder_type = command.replace('_reminder', '')
-        
+        reminder_type = command.replace("_reminder", "")
+
         # Get scheduler instance
         scheduler: LearningScheduler = context.application.scheduler
-        
+
         # Validate reminder type
         valid_types = scheduler.REMINDER_PROMPTS.keys()
         if reminder_type not in valid_types:
             await update.message.reply_text(
-                f"❌ Invalid reminder type. Available types are:\n" + 
-                "\n".join([f"/{k}_reminder HH:MM" for k in valid_types])
+                f"❌ Invalid reminder type. Available types are:\n"
+                + "\n".join([f"/{k}_reminder HH:MM" for k in valid_types])
             )
             return
 
         # Get time from command
         try:
             time_str = update.message.text.split()[1]
-            if not re.match(r'^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$', time_str):
+            if not re.match(r"^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$", time_str):
                 raise ValueError("Invalid time format")
         except (IndexError, ValueError):
             await update.message.reply_text(
@@ -46,7 +47,7 @@ async def set_reminder(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
         # Update reminder
         success = await scheduler.update_reminder_time(user_id, reminder_type, time_str)
-        
+
         if success:
             await update.message.reply_text(
                 f"✅ {reminder_type}_reminder set to {time_str}\n"
@@ -62,6 +63,7 @@ async def set_reminder(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await update.message.reply_text(
             "❌ Sorry, something went wrong. Please try again later."
         )
+
 
 def get_reminder_handlers():
     """Get all reminder-related command handlers"""

@@ -6,6 +6,7 @@ from src.database import get_db_connection
 
 logger = logging.getLogger(__name__)
 
+
 class MessagesRepository:
     """Repository for conversation_history table."""
 

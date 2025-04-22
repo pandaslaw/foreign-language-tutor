@@ -20,6 +20,7 @@ os.makedirs(LOG_DIR, exist_ok=True)
 # Initialize voice handler for global use
 voice_handler = VoiceHandler()
 
+
 def get_today_logs() -> List[str]:
     """Collects all file paths of log files for today."""
     today = dt.datetime.now().date()
@@ -138,7 +139,11 @@ async def say_text(update: Update, context: CallbackContext) -> None:
         return
 
     # Get text from command arguments or use default
-    text = " ".join(context.args) if context.args else "Merhaba! Nasılsın? Bugün seninle Türkçe pratik yapalım!"
+    text = (
+        " ".join(context.args)
+        if context.args
+        else "Merhaba! Nasılsın? Bugün seninle Türkçe pratik yapalım!"
+    )
 
     try:
         # Show recording indicator

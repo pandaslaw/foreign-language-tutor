@@ -40,9 +40,9 @@ def clean_llm_response(text: str) -> str:
 
 
 def load_history_and_generate_answer(
-        user_id: int,
-        user_input: str,
-        assistant_prompt: str = None,
+    user_id: int,
+    user_input: str,
+    assistant_prompt: str = None,
 ) -> str:
     """
     Loads message history from DB, prepares the system prompt by enriching it with full message history
@@ -80,7 +80,7 @@ def load_history_and_generate_answer(
 
 
 def generate_answer(
-        user_input: str, system_prompt: str = None, assistant_prompt: str = None
+    user_input: str, system_prompt: str = None, assistant_prompt: str = None
 ) -> str:
     """
     Calls LLM using system prompt and user's text message.
@@ -158,9 +158,9 @@ def generate_answer(
 
 
 def update_system_prompt(
-        messages: List[Dict[str, Union[str, dt.datetime]]],
-        system_prompt: str = app_settings.SYSTEM_PROMPT,
-        user_data=None,
+    messages: List[Dict[str, Union[str, dt.datetime]]],
+    system_prompt: str = app_settings.SYSTEM_PROMPT,
+    user_data=None,
 ) -> str:
     """Adds context (previous messages from the chat) to the system prompt."""
 
@@ -181,7 +181,7 @@ def update_system_prompt(
 
 
 def summarize_history(
-        messages: List[Dict[str, Union[str, dt.datetime]]], n_last_messages: int = None
+    messages: List[Dict[str, Union[str, dt.datetime]]], n_last_messages: int = None
 ) -> str:
     """
     Condense older messages to reduce token usage. Returns a string summary.

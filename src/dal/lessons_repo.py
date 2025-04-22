@@ -4,6 +4,7 @@ from typing import List, Optional
 
 logger = logging.getLogger(__name__)
 
+
 class LessonsRepository:
     """Repository for users table."""
 

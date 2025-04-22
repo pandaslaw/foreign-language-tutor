@@ -76,7 +76,7 @@ async def set_bot_commands(app: Application) -> None:
         BotCommand("morning_reminder", "Set morning practice time "),
         BotCommand("afternoon_reminder", "Set afternoon practice time "),
         BotCommand("evening_reminder", "Set evening practice time "),
-        BotCommand("cancel", "Cancel current operation ")
+        BotCommand("cancel", "Cancel current operation "),
     ]
 
     await app.bot.set_my_commands(commands)
@@ -125,7 +125,6 @@ async def ask_native_language(update: Update, context: CallbackContext) -> int:
 async def ask_target_language(update: Update, context: CallbackContext) -> int:
     user_response = update.message.text.strip()
     context.user_data["target_language"] = user_response
-
 
     reply_keyboard = [["Beginner", "Intermediate", "Advanced", "Fluent"]]
     await update.message.reply_text(
@@ -200,7 +199,7 @@ async def ask_scenario(update: Update, context: CallbackContext) -> int:
 
 
 async def handle_text_message(
-        update: Update, context: CallbackContext, transcribed_text: str = None
+    update: Update, context: CallbackContext, transcribed_text: str = None
 ):
     """Handle text messages or transcribed voice messages"""
     start_time = time.time()

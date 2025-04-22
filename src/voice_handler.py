@@ -27,12 +27,13 @@ client = ElevenLabs(api_key=app_settings.ELEVENLABS_API_KEY)
 
 # Initialize Whisper model (download happens only once)
 from faster_whisper import WhisperModel
+
 logger.info("Downloading of base whisper model started.")
 whisper_model = WhisperModel(
     "base",
     device="cpu",
     compute_type="int8",
-    download_root=os.path.join(os.path.dirname(__file__), "..", "models")
+    download_root=os.path.join(os.path.dirname(__file__), "..", "models"),
 )
 logger.info("Downloading of base whisper model completed.")
 
@@ -42,7 +43,7 @@ VOICE_SETTINGS = VoiceSettings(
     similarity_boost=0.75,  # Keep character consistent
     style=0.35,  # Slight expression variation
     use_speaker_boost=True,  # Clearer speech
-    speaking_rate=0.85  # Slightly slower than default (1.0)
+    speaking_rate=0.85,  # Slightly slower than default (1.0)
 )
 
 # Cache for ElevenLabs voices
@@ -55,14 +56,16 @@ def get_voice_by_name(name: str = None) -> Optional[str]:
     try:
         if VOICE_CACHE is None:
             voices_response = client.voices.get_all()
-            VOICE_CACHE = {voice.name: voice.voice_id for voice in voices_response.voices}
-        
+            VOICE_CACHE = {
+                voice.name: voice.voice_id for voice in voices_response.voices
+            }
+
         if name and name in VOICE_CACHE:
             return VOICE_CACHE[name]
-        
+
         # If no name specified or not found, return first voice
         return list(VOICE_CACHE.values())[0] if VOICE_CACHE else None
-            
+
     except Exception as e:
         logger.error(f"Error getting ElevenLabs voices: {e}")
         return None
@@ -105,7 +108,7 @@ class VoiceHandler:
 
     @cleanup_file
     async def transcribe_voice_message(
-            self, update: Update, context: CallbackContext, temp_files: list
+        self, update: Update, context: CallbackContext, temp_files: list
     ) -> Tuple[bool, str]:
         """
         Transcribe a voice message using Faster Whisper.
@@ -119,7 +122,7 @@ class VoiceHandler:
 
             # Download voice file
             voice_file = await context.bot.get_file(voice_message.file_id)
-            
+
             # Save to temporary file
             temp_path = self._get_temp_path("voice_message", ".ogg")
             await voice_file.download_to_drive(temp_path)
@@ -133,13 +136,13 @@ class VoiceHandler:
                     # language="tr",  # Specify Turkish for better accuracy
                     beam_size=5,  # Increase beam size for better accuracy
                     vad_filter=True,  # Filter out non-speech
-                    word_timestamps=False  # No need for timestamps
-                )
+                    word_timestamps=False,  # No need for timestamps
+                ),
             )
 
             # Combine all segments into final text
             text = " ".join(segment.text for segment in segments)
-            
+
             return True, text.strip()
 
         except Exception as e:
@@ -148,7 +151,7 @@ class VoiceHandler:
 
     @cleanup_file
     async def text_to_voice(
-            self, text: str, lang: str = "tr", temp_files=None, voice_name: str = None
+        self, text: str, lang: str = "tr", temp_files=None, voice_name: str = None
     ) -> Tuple[bool, str]:
         """
         Convert text to voice using ElevenLabs.
@@ -159,7 +162,9 @@ class VoiceHandler:
             # Get the voice (cached)
             voice_id = get_voice_by_name(voice_name)
             if not voice_id:
-                raise RuntimeError(f"Could not find ElevenLabs voice '{voice_name or 'default'}'")
+                raise RuntimeError(
+                    f"Could not find ElevenLabs voice '{voice_name or 'default'}'"
+                )
 
             # Generate audio file with unique name
             voice_path = self._get_temp_path("voice_response", ".mp3")

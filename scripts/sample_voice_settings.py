@@ -6,9 +6,9 @@ import codecs
 from pathlib import Path
 
 # Set up UTF-8 output for Turkish characters
-if sys.platform == 'win32':
-    sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer, 'strict')
-    sys.stderr = codecs.getwriter('utf-8')(sys.stderr.buffer, 'strict')
+if sys.platform == "win32":
+    sys.stdout = codecs.getwriter("utf-8")(sys.stdout.buffer, "strict")
+    sys.stderr = codecs.getwriter("utf-8")(sys.stderr.buffer, "strict")
 
 # Add project root to Python path
 project_root = Path(__file__).parent.parent
@@ -25,12 +25,10 @@ async def gen_voice():
     test_texts = [
         # Morning greeting (warm and energetic)
         "Günaydın! Nasılsın? Umarım güzel bir gün geçiriyorsun. Bugün seninle Türkçe pratik yapalım!",
-
         # Midday conversation (natural and friendly)
         "Öğle yemeğinde ne yedin? Ben genellikle Türk mutfağından mercimek çorbası ve köfte tercih ediyorum.",
-
         # Evening reflection (warm and soulful)
-        "Bugün çok iyi çalıştın! Yeni kelimeler öğrendin ve güzel cümleler kurdun. Seninle gurur duyuyorum!"
+        "Bugün çok iyi çalıştın! Yeni kelimeler öğrendin ve güzel cümleler kurdun. Seninle gurur duyuyorum!",
     ]
 
     # Initialize ElevenLabs client
@@ -45,11 +43,13 @@ async def gen_voice():
     for voice in voices_response.voices:
         print(f"\nVoice: {voice.name}")
         print(f"ID: {voice.voice_id}")
-        print(f"Description: {voice.description if hasattr(voice, 'description') else 'N/A'}")
+        print(
+            f"Description: {voice.description if hasattr(voice, 'description') else 'N/A'}"
+        )
         print(f"Labels: {voice.labels if hasattr(voice, 'labels') else {} }")
 
         # Look for a warm, friendly female voice
-        if hasattr(voice, 'labels') and voice.labels.get('gender') == 'female':
+        if hasattr(voice, "labels") and voice.labels.get("gender") == "female":
             target_voice = voice
             print("*** This voice matches our criteria! ***")
 
@@ -63,14 +63,18 @@ async def gen_voice():
 
     for text in test_texts:
         print(f"\nGenerating voice for text:\n{text}")
-        success, result = await handler.text_to_voice(text, voice_name=target_voice.name)
+        success, result = await handler.text_to_voice(
+            text, voice_name=target_voice.name
+        )
 
         if success:
             print("Playing audio...")
-            os.system(f'start {result}')
+            os.system(f"start {result}")
 
-            response = input("\nRate this sample (1-5) or press Enter to continue, 'q' to quit: ")
-            if response.lower() == 'q':
+            response = input(
+                "\nRate this sample (1-5) or press Enter to continue, 'q' to quit: "
+            )
+            if response.lower() == "q":
                 break
             elif response.strip() and response.isdigit():
                 rating = int(response)
