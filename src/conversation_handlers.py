@@ -69,14 +69,12 @@ def register_conversation_handlers(app: Application):
 async def set_bot_commands(app: Application) -> None:
     """Set bot commands to show in Telegram GUI menu."""
     commands = [
-        BotCommand("start", "Start learning Turkish "),
-        # BotCommand("help", "Show help message "),
-        # BotCommand("practice", "Start a practice session "),
-        # BotCommand("progress", "View your learning progress "),
-        BotCommand("morning_reminder", "Set morning practice time "),
-        BotCommand("afternoon_reminder", "Set afternoon practice time "),
-        BotCommand("evening_reminder", "Set evening practice time "),
-        BotCommand("cancel", "Cancel current operation "),
+        BotCommand("start", "Start learning Turkish 🇹🇷"),
+        BotCommand("reminders", "View and manage your reminders 🔔"),
+        BotCommand("morning_reminder", "Set morning practice time ☀️"),
+        BotCommand("afternoon_reminder", "Set afternoon practice time 🌤️"),
+        BotCommand("evening_reminder", "Set evening practice time 🌙"),
+        BotCommand("cancel", "Cancel current operation ❌"),
     ]
 
     await app.bot.set_my_commands(commands)

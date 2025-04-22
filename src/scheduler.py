@@ -1,20 +1,18 @@
+import asyncio
+import datetime as dt
 import logging
 import random
-from datetime import datetime, time
 from typing import Dict, Optional
-import asyncio
 
+from apscheduler.job import Job
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-from apscheduler.job import Job
-from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application
 
 from src.config import app_settings
 from src.dal.reminder_settings import ReminderSettings
 from src.dal.users_repo import UsersRepository
 from src.utils import generate_answer
-import datetime as dt
 
 logger = logging.getLogger(__name__)
 
@@ -147,7 +145,8 @@ The entire message should be in Turkish.""",
                 hour, minute = map(int, new_time.split(":"))
                 if not (0 <= hour <= 23 and 0 <= minute <= 59):
                     raise ValueError("Invalid time")
-                new_time = f"{hour:02d}:{minute:02d}"
+                # new_time = f"{hour:02d}:{minute:02d}"
+                new_time = dt.time(hour, minute, 0)
             except ValueError:
                 logger.error(f"Invalid time format: {new_time}")
                 return False

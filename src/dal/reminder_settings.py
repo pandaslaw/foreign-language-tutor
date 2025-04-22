@@ -1,6 +1,6 @@
+import datetime as dt
 import logging
-from typing import Dict, List, Optional
-from datetime import datetime
+from typing import Dict, List
 
 from src.database import get_db_connection
 
@@ -64,20 +64,44 @@ class ReminderSettings:
 
     @staticmethod
     async def update_reminder(
-        user_id: int, reminder_type: str, reminder_time: str, enabled: bool = True
+        user_id: int, reminder_type: str, reminder_time: dt.time, enabled: bool = True
     ) -> bool:
         """Update or create a reminder setting."""
         try:
             with get_db_connection() as conn:
                 with conn.cursor() as cur:
+                    # First check if reminder exists
                     cur.execute(
                         """
-                        INSERT INTO reminder_settings (
-                            user_id, reminder_type, reminder_time, enabled
-                        ) VALUES (%s, %s, %s, %s)
-                    """,
-                        (user_id, reminder_type, reminder_time, enabled),
+                        SELECT id FROM reminder_settings
+                        WHERE user_id = %s AND reminder_type = %s
+                        """,
+                        (user_id, reminder_type),
                     )
+                    exists = cur.fetchone()
+
+                    if exists:
+                        # Update existing reminder
+                        cur.execute(
+                            """
+                            UPDATE reminder_settings
+                            SET reminder_time = %s,
+                                enabled = %s,
+                                updated_at = CURRENT_TIMESTAMP
+                            WHERE user_id = %s AND reminder_type = %s
+                            """,
+                            (reminder_time, enabled, user_id, reminder_type),
+                        )
+                    else:
+                        # Insert new reminder
+                        cur.execute(
+                            """
+                            INSERT INTO reminder_settings (
+                                user_id, reminder_type, reminder_time, enabled, updated_at
+                            ) VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
+                            """,
+                            (user_id, reminder_type, reminder_time, enabled),
+                        )
                     conn.commit()
                     return True
         except Exception as e:

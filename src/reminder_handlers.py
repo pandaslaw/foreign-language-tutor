@@ -1,11 +1,10 @@
 import logging
 import re
-from datetime import datetime
-from typing import Dict
 
-from telegram import Update
-from telegram.ext import ContextTypes, CommandHandler, Application
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ContextTypes, CommandHandler, Application, CallbackQueryHandler
 
+from src.dal.reminder_settings import ReminderSettings
 from src.scheduler import LearningScheduler
 
 logger = logging.getLogger(__name__)
@@ -65,12 +64,126 @@ async def set_reminder(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         )
 
 
+async def list_reminders(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /reminders command to show all reminders"""
+    try:
+        user_id = update.effective_user.id
+        reminders = await ReminderSettings.get_user_reminders(user_id)
+
+        if not reminders:
+            await update.message.reply_text(
+                "🔔 У тебя пока нет установленных напоминаний.\n\n"
+                "Чтобы установить напоминание, используй команды:\n"
+                "/morning_reminder HH:MM\n"
+                "/afternoon_reminder HH:MM\n"
+                "/evening_reminder HH:MM"
+            )
+            return
+
+        # Create message with inline keyboard for each reminder
+        message = "🔔 Твои напоминания:\n\n"
+        keyboard = []
+
+        for reminder_type, settings in reminders.items():
+            status = "✅ Включено" if settings["enabled"] else "❌ Выключено"
+            message += f"{reminder_type}: {settings['time']} - {status}\n"
+
+            # Add button to delete each reminder
+            keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        f"❌ Удалить {reminder_type}",
+                        callback_data=f"delete_reminder:{reminder_type}",
+                    )
+                ]
+            )
+
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.message.reply_text(message, reply_markup=reply_markup)
+
+    except Exception as e:
+        logger.error(f"Error in list_reminders: {e}")
+        await update.message.reply_text(
+            "❌ Извини, что-то пошло не так. Попробуй позже."
+        )
+
+
+async def handle_reminder_callback(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> None:
+    """Handle callback queries from reminder management buttons"""
+    try:
+        query = update.callback_query
+        await query.answer()
+
+        if query.data.startswith("delete_reminder:"):
+            reminder_type = query.data.split(":")[1]
+            user_id = query.from_user.id
+
+            # Get scheduler instance and disable reminder
+            scheduler: LearningScheduler = context.application.scheduler
+            success = await scheduler.disable_reminder(user_id, reminder_type)
+
+            if success:
+                # Update the message to show current reminders
+                reminders = await ReminderSettings.get_user_reminders(user_id)
+                if not reminders:
+                    await query.edit_message_text(
+                        "🔔 У тебя больше нет установленных напоминаний.\n\n"
+                        "Чтобы установить новое напоминание, используй команды:\n"
+                        "/morning_reminder HH:MM\n"
+                        "/afternoon_reminder HH:MM\n"
+                        "/evening_reminder HH:MM"
+                    )
+                    return
+
+                message = "🔔 Твои напоминания:\n\n"
+                keyboard = []
+
+                for r_type, settings in reminders.items():
+                    status = "✅ Включено" if settings["enabled"] else "❌ Выключено"
+                    message += f"{r_type}: {settings['time']} - {status}\n"
+
+                    # Add button to delete each reminder
+                    keyboard.append(
+                        [
+                            InlineKeyboardButton(
+                                f"❌ Удалить {r_type}",
+                                callback_data=f"delete_reminder:{r_type}",
+                            )
+                        ]
+                    )
+
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                await query.edit_message_text(message, reply_markup=reply_markup)
+            else:
+                await query.edit_message_text(
+                    "❌ Извини, не удалось удалить напоминание. Попробуй позже."
+                )
+
+    except Exception as e:
+        logger.error(f"Error in handle_reminder_callback: {e}")
+        await query.edit_message_text("❌ Извини, что-то пошло не так. Попробуй позже.")
+
+
 def get_reminder_handlers():
     """Get all reminder-related command handlers"""
-    return [
+    handlers = [
         CommandHandler(f"{reminder_type}_reminder", set_reminder)
         for reminder_type in LearningScheduler.REMINDER_PROMPTS.keys()
     ]
+
+    # Add handlers for listing and managing reminders
+    handlers.extend(
+        [
+            CommandHandler("reminders", list_reminders),
+            CallbackQueryHandler(
+                handle_reminder_callback, pattern=r"^delete_reminder:"
+            ),
+        ]
+    )
+
+    return handlers
 
 
 def register_reminder_handlers(app: Application):
