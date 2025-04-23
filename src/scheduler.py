@@ -12,6 +12,7 @@ from telegram.ext import Application
 from src.config import app_settings
 from src.dal.reminder_settings import ReminderSettings
 from src.dal.users_repo import UsersRepository
+from src.database import get_db_connection
 from src.utils import generate_answer
 
 logger = logging.getLogger(__name__)
@@ -64,13 +65,30 @@ The entire message should be in Turkish.""",
         self.scheduler = AsyncIOScheduler()
         self.jobs: Dict[str, Job] = {}  # Store jobs by job_id
         self.prompts = app_settings.SYSTEM_PROMPTS.get("daily_interactions", {})
+        self.health_check_task = None  # Task for database health checks
+        # Schedule periodic job status logging
+        self.scheduler.add_job(
+            self._log_job_status,
+            CronTrigger(minute='*/30'),  # Run every 30 minutes
+            id='job_status_logger',
+            replace_existing=True
+        )
 
     async def start(self):
         """Start the scheduler and restore all active reminders."""
         if not self.scheduler.running:
+            # Start database health check
+            self.health_check_task = asyncio.create_task(self._db_health_check())
+            
+            # Start scheduler
             self.scheduler.start()
             await self._restore_reminders()
-            logger.info("Learning scheduler started successfully")
+            
+            # Log initial jobs
+            jobs = self.scheduler.get_jobs()
+            logger.info(f"Learning scheduler started with {len(jobs)} jobs")
+            for job in jobs:
+                logger.info(f"Job: {job.id} - Next run: {job.next_run_time}")
         else:
             logger.warning("Scheduler is already running")
 
@@ -83,16 +101,24 @@ The entire message should be in Turkish.""",
         try:
             # Get all active reminders
             reminders = await ReminderSettings.get_all_active_reminders()
+            logger.info(f"Found {len(reminders)} active reminders in database")
 
             # Schedule each reminder
+            scheduled = 0
             for reminder in reminders:
-                await self._schedule_reminder(
+                job = await self._schedule_reminder(
                     user_id=reminder["user_id"],
                     reminder_type=reminder["reminder_type"],
                     reminder_time=reminder["reminder_time"],
                 )
+                if job:
+                    scheduled += 1
 
-            logger.info(f"Restored {len(reminders)} active reminders")
+            logger.info(
+                f"Restored {scheduled}/{len(reminders)} active reminders. "
+                f"Current active jobs: {len(self.jobs)}"
+            )
+            await self._log_job_status()
 
         except Exception as e:
             logger.error(f"Error restoring reminders: {e}")
@@ -126,8 +152,10 @@ The entire message should be in Turkish.""",
             # Store job reference
             self.jobs[job_id] = job
 
+            next_run = job.next_run_time.strftime('%Y-%m-%d %H:%M:%S %Z') if job.next_run_time else 'Never'
             logger.info(
-                f"Scheduled {reminder_type} reminder for user {user_id} at {reminder_time}"
+                f"Scheduled {reminder_type} reminder for user {user_id} at {reminder_time}. "
+                f"Next run: {next_run}"
             )
             return job
 
@@ -274,10 +302,55 @@ The entire message should be in Turkish.""",
             logger.error(f"Error disabling reminder: {e}")
             return False
 
+    async def _log_job_status(self):
+        """Log current status of all scheduled jobs."""
+        try:
+            current_time = dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S %Z')
+            logger.info(f"\nScheduler Status Report at {current_time}:")
+            logger.info(f"Scheduler running: {self.scheduler.running}")
+            logger.info(f"Total jobs: {len(self.jobs)}")
+
+            for job_id, job in self.jobs.items():
+                next_run = job.next_run_time.strftime('%Y-%m-%d %H:%M:%S %Z') if job.next_run_time else 'Never'
+                logger.info(
+                    f"Job {job_id}:\n"
+                    f"  - Next run: {next_run}\n"
+                    f"  - Trigger: {job.trigger}\n"
+                    f"  - Active: {job.next_run_time is not None}"
+                )
+        except Exception as e:
+            logger.error(f"Error logging job status: {e}")
+
+    async def _db_health_check(self, interval: int = 300):
+        """Periodically check database health to prevent connection timeouts."""
+        while True:
+            try:
+                with get_db_connection() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute("SELECT 1;")
+                        logger.info("Database connection is healthy")
+                await asyncio.sleep(interval)
+            except Exception as e:
+                logger.error(f"Database health check failed: {e}")
+                await asyncio.sleep(10)  # Shorter interval on failure
+            except asyncio.CancelledError:
+                logger.info("Database health check stopped")
+                break
+
     async def stop(self):
         """Stop the scheduler gracefully."""
         try:
+            # Stop health check
+            if self.health_check_task:
+                self.health_check_task.cancel()
+                try:
+                    await self.health_check_task
+                except asyncio.CancelledError:
+                    pass
+
+            # Stop scheduler
             if self.scheduler.running:
+                await self._log_job_status()  # Log final status before stopping
                 self.scheduler.shutdown()
                 self.jobs.clear()
                 logger.info("Learning scheduler stopped")
