@@ -140,3 +140,4 @@ system_prompt: |
   Student's target language: {target_language}
   Student's current level: {current_level}
   Student's goal: {learning_goal}
+  Student's gender: female
