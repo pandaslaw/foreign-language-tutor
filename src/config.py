@@ -29,9 +29,19 @@ class AppSettings(BaseSettings):
     # Google Cloud TTS settings
     GOOGLE_CLOUD_PROJECT_ID: str
     GOOGLE_APPLICATION_CREDENTIALS: str
-    GOOGLE_TTS_LANGUAGE_CODE: str = "tr-TR"  # Default Turkish
-    GOOGLE_TTS_VOICE_NAME: str = "tr-TR-Standard-D"  # Default Turkish female
+    
+    # Default voice settings
+    GOOGLE_TTS_LANGUAGE_CODE: str = "tr-TR"  # Default language code
+    GOOGLE_TTS_VOICE_NAME: str = "tr-TR-Standard-D"  # Default voice name
     VOICE_STYLE: str = "Empathetic"  # Default style for voice generation
+    
+    # Voice configuration for different languages
+    # Format: {language_code: voice_name}
+    VOICE_MODELS: dict = {
+        "tr": {"code": "tr-TR", "voice": "tr-TR-Standard-D"},  # Turkish
+        "en": {"code": "en-US", "voice": "en-US-Standard-F"},  # English
+        "ru": {"code": "ru-RU", "voice": "ru-RU-Standard-E"}   # Russian
+    }
 
     # OpenRouter API settings
     OPENROUTER_API_KEY: str

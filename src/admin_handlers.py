@@ -147,10 +147,15 @@ async def say_text(update: Update, context: CallbackContext) -> None:
         
         # Create a voice handler instance when needed
         from src.voice_handler import VoiceHandler
+        from src.language_detection import detect_language
         voice_handler = VoiceHandler()
         
-        # Generate voice
-        success, result = await voice_handler.text_to_voice(text)
+        # Detect language of the text
+        detected_lang = detect_language(text)
+        logger.info(f"Detected language for /say command: {detected_lang}")
+        
+        # Generate voice with detected language
+        success, result = await voice_handler.text_to_voice(text, lang=detected_lang)
 
         if success:
             # Send voice message

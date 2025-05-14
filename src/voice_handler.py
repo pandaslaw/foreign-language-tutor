@@ -14,6 +14,7 @@ from telegram.ext import CallbackContext
 
 from src.config import app_settings
 from src.message_processor import process_text_message, get_last_bot_response
+from src.language_detection import detect_language, get_voice_for_language
 
 # Disable symlinks warning
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
@@ -146,7 +147,7 @@ class VoiceHandler:
 
     @cleanup_file
     async def text_to_voice(
-        self, text: str, lang: str = "tr", temp_files=None, voice_name: str = None
+        self, text: str, lang: str = None, temp_files=None, voice_name: str = None
     ) -> Tuple[bool, str]:
         """
         Convert text to voice using Google Cloud TTS.
@@ -154,15 +155,13 @@ class VoiceHandler:
         """
         temp_files = [] if not temp_files else temp_files
         try:
-            # Choose Google TTS voice based on language
-            language_code = app_settings.GOOGLE_TTS_LANGUAGE_CODE
-            tts_voice = app_settings.GOOGLE_TTS_VOICE_NAME
+            # Detect language from text if not specified
+            detected_lang = lang or detect_language(text)
             
-            # Handle non-Turkish languages if needed
-            if lang != "tr":
-                # Extend for other languages if needed
-                language_code = "en-US"
-                tts_voice = "en-US-Standard-C"  # fallback for English, customize as needed
+            # Get appropriate voice model for the detected language
+            language_code, tts_voice = get_voice_for_language(detected_lang, app_settings)
+            
+            logger.info(f"Using voice {tts_voice} for language {detected_lang} (code: {language_code})")
 
             # Generate audio file with unique name
             voice_path = self._get_temp_path("voice_response", ".mp3")
@@ -181,6 +180,8 @@ class VoiceHandler:
                 name=tts_voice,
                 ssml_gender=texttospeech.SsmlVoiceGender.FEMALE,
             )
+            
+            logger.info(f"Synthesizing speech with voice: {tts_voice}, language: {language_code}")
             audio_config = texttospeech.AudioConfig(
                 audio_encoding=texttospeech.AudioEncoding.MP3,
                 speaking_rate=GOOGLE_TTS_SPEAKING_RATE,
@@ -223,6 +224,10 @@ class VoiceHandler:
                 await update.message.reply_text(result)
                 return
 
+            # Detect language of the transcribed text
+            input_language = detect_language(result)
+            logger.info(f"Detected language of voice message: {input_language}")
+            
             # Echo what we understood
             await update.message.reply_text(
                 f"In your voice message you said:\n'{result}'"
@@ -243,8 +248,8 @@ class VoiceHandler:
             
             logger.info("Converting bot response to voice")
 
-            # Convert to voice and send
-            success, voice_path = await self.text_to_voice(last_response)
+            # Convert to voice and send - use the same language as the input
+            success, voice_path = await self.text_to_voice(last_response, lang=input_language)
             if success:
                 # Send voice response
                 try:
