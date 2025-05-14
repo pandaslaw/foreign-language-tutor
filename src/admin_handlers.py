@@ -9,16 +9,12 @@ from telegram.ext import CallbackContext, Application, CommandHandler
 
 from src.config import app_settings
 from src.scheduler import LearningScheduler
-from src.voice_handler import VoiceHandler
 
 logger = getLogger(__name__)
 
 # Define log directory relative to project root
 LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs")
 os.makedirs(LOG_DIR, exist_ok=True)
-
-# Initialize voice handler for global use
-voice_handler = VoiceHandler()
 
 
 def get_today_logs() -> List[str]:
@@ -148,9 +144,13 @@ async def say_text(update: Update, context: CallbackContext) -> None:
     try:
         # Show recording indicator
         await context.bot.send_chat_action(chat_id=chat_id, action="record_voice")
-
+        
+        # Create a voice handler instance when needed
+        from src.voice_handler import VoiceHandler
+        voice_handler = VoiceHandler()
+        
         # Generate voice
-        success, result = await voice_handler.text_to_voice(text, voice_name="Lily")
+        success, result = await voice_handler.text_to_voice(text)
 
         if success:
             # Send voice message

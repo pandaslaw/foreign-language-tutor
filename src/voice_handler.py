@@ -13,6 +13,7 @@ from telegram import Update
 from telegram.ext import CallbackContext
 
 from src.config import app_settings
+from src.message_processor import process_text_message, get_last_bot_response
 
 # Disable symlinks warning
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
@@ -227,26 +228,19 @@ class VoiceHandler:
                 f"In your voice message you said:\n'{result}'"
             )
 
-            # Process the text message normally using the existing handler
-            from src.run_bot import handle_text_message
-
-            await handle_text_message(update, context, result)
+            # Process the transcribed text message through the message processor
+            await process_text_message(update, context, result)
 
             # Generate voice response
             await context.bot.send_chat_action(chat_id=chat_id, action="record_voice")
             await update.message.reply_text("Recording answer for you...")
 
             # Get the last bot response from the message history
-            from src.dal import MessagesRepository
-
-            last_messages = MessagesRepository.get_recent_messages(
-                update.message.from_user.id, limit=1
-            )
-            if not last_messages:
+            last_response = await get_last_bot_response(update.message.from_user.id)
+            if not last_response:
                 logger.warning("No response found in message history")
                 return
-
-            last_response = last_messages[0]["content"]
+            
             logger.info("Converting bot response to voice")
 
             # Convert to voice and send

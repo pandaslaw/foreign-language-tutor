@@ -13,9 +13,7 @@ from telegram.ext import (
     ContextTypes,
 )
 
-from src.admin_handlers import (
-    voice_handler,
-)
+# Voice handler will be registered in run_bot.py
 from src.config import SCENARIO_PROMPTS
 from src.dal import MessagesRepository, UsersRepository
 from src.language import Language
@@ -59,11 +57,7 @@ def register_conversation_handlers(app: Application):
     app.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message)
     )
-    app.add_handler(
-        MessageHandler(
-            filters.VOICE & ~filters.COMMAND, voice_handler.handle_voice_message
-        )
-    )
+    # Voice handler will be registered in run_bot.py
 
 
 async def set_bot_commands(app: Application) -> None:
@@ -200,40 +194,9 @@ async def handle_text_message(
     update: Update, context: CallbackContext, transcribed_text: str = None
 ):
     """Handle text messages or transcribed voice messages"""
-    start_time = time.time()
-    log_memory_usage()
-    tg_id = update.message.from_user.id
-
-    # Use transcribed text if provided, otherwise use the text message
-    message_text = transcribed_text or update.message.text
-
-    logger.info(f"Processing message from user '{tg_id}': {message_text}")
-
-    try:
-        # Save message to history
-        current_scenario = get_current_scenario(context.user_data)
-        MessagesRepository.save_message(
-            tg_id, f"[Scenario: {current_scenario}] {message_text}"
-        )
-
-        # Generate response
-        response = load_history_and_generate_answer(tg_id, message_text)
-
-        # Save bot's response
-        MessagesRepository.save_message(tg_id, response, is_llm=True)
-
-        # Send response
-        await update.message.reply_text(response)
-
-        processing_time = time.time() - start_time
-        logger.info(f"Message processing took {processing_time:.2f} seconds")
-        log_memory_usage()
-
-    except Exception as e:
-        logger.error(f"Error processing message: {e}", exc_info=True)
-        await update.message.reply_text(
-            "I'm having trouble processing your message right now. Please try again in a moment."
-        )
+    # Delegate to the central message processor
+    from src.message_processor import process_text_message
+    await process_text_message(update, context, transcribed_text)
 
 
 async def cancel(update: Update, context: CallbackContext) -> int:

@@ -3,6 +3,8 @@ from logging import getLogger
 
 from telegram.ext import (
     ApplicationBuilder,
+    MessageHandler,
+    filters,
 )
 
 from src.admin_handlers import (
@@ -14,6 +16,7 @@ from src.error_handlers import error_handler
 from src.reminder_handlers import register_reminder_handlers
 from src.scheduler import LearningScheduler
 from src.utils import log_memory_usage
+from src.voice_handler import VoiceHandler
 
 logger = getLogger(__name__)
 
@@ -25,10 +28,19 @@ async def main():
     # Initialize the application
     await bot_app.initialize()
 
+    # Create voice handler instance
+    voice_handler = VoiceHandler()
+    
     # Register all handlers
     register_reminder_handlers(bot_app)
     register_admin_handlers(bot_app)
     register_conversation_handlers(bot_app)
+    
+    # Register voice message handler
+    bot_app.add_handler(
+        MessageHandler(filters.VOICE & ~filters.COMMAND, voice_handler.handle_voice_message)
+    )
+    
     await set_bot_commands(bot_app)
     bot_app.add_error_handler(error_handler)
 
