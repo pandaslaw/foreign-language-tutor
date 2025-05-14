@@ -8,7 +8,7 @@ from functools import wraps
 from typing import Optional, Tuple
 
 import openai
-from elevenlabs import ElevenLabs, VoiceSettings
+from google.cloud import texttospeech
 from telegram import Update
 from telegram.ext import CallbackContext
 
@@ -22,8 +22,10 @@ logger = logging.getLogger(__name__)
 # Initialize API keys
 # openai.api_key = app_settings.OPENAI_API_KEY
 
-# Initialize ElevenLabs client
-client = ElevenLabs(api_key=app_settings.ELEVENLABS_API_KEY)
+# Initialize Google Cloud TTS client
+# Google credentials are loaded from the path specified in environment variable
+os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = app_settings.GOOGLE_APPLICATION_CREDENTIALS
+client = texttospeech.TextToSpeechClient()
 
 # Initialize Whisper model (download happens only once)
 from faster_whisper import WhisperModel
@@ -37,17 +39,10 @@ whisper_model = WhisperModel(
 )
 logger.info("Downloading of base whisper model completed.")
 
-# Voice settings for a warm, natural, slightly slower speech
-VOICE_SETTINGS = VoiceSettings(
-    stability=0.71,  # More stable voice
-    similarity_boost=0.75,  # Keep character consistent
-    style=0.35,  # Slight expression variation
-    use_speaker_boost=True,  # Clearer speech
-    speaking_rate=0.85,  # Slightly slower than default (1.0)
-)
-
-# Cache for ElevenLabs voices
-VOICE_CACHE = None
+# Google TTS voice settings for a warm, moderately slow Turkish female voice
+GOOGLE_TTS_VOICE = "tr-TR-Standard-D"  # or "tr-TR-Wavenet-D" for higher quality
+GOOGLE_TTS_SPEAKING_RATE = 0.85  # Slightly slower than default
+GOOGLE_TTS_PITCH = 0.0  # Neutral pitch
 
 
 def get_voice_by_name(name: str = None) -> Optional[str]:
@@ -98,7 +93,6 @@ class VoiceHandler:
         """Initialize voice handler with optional custom temp directory"""
         self.temp_dir = temp_dir or tempfile.gettempdir()
         os.makedirs(self.temp_dir, exist_ok=True)
-        self.VOICE_SETTINGS = VOICE_SETTINGS
 
     def _get_temp_path(self, prefix: str, suffix: str) -> str:
         """Generate a temporary file path."""
@@ -154,17 +148,20 @@ class VoiceHandler:
         self, text: str, lang: str = "tr", temp_files=None, voice_name: str = None
     ) -> Tuple[bool, str]:
         """
-        Convert text to voice using ElevenLabs.
+        Convert text to voice using Google Cloud TTS.
         Returns: Tuple[success: bool, file_path: str]
         """
         temp_files = [] if not temp_files else temp_files
         try:
-            # Get the voice (cached)
-            voice_id = get_voice_by_name(voice_name)
-            if not voice_id:
-                raise RuntimeError(
-                    f"Could not find ElevenLabs voice '{voice_name or 'default'}'"
-                )
+            # Choose Google TTS voice based on language
+            language_code = app_settings.GOOGLE_TTS_LANGUAGE_CODE
+            tts_voice = app_settings.GOOGLE_TTS_VOICE_NAME
+            
+            # Handle non-Turkish languages if needed
+            if lang != "tr":
+                # Extend for other languages if needed
+                language_code = "en-US"
+                tts_voice = "en-US-Standard-C"  # fallback for English, customize as needed
 
             # Generate audio file with unique name
             voice_path = self._get_temp_path("voice_response", ".mp3")
@@ -177,25 +174,33 @@ class VoiceHandler:
             text = text.replace(".", ". ... ")
             text = text.replace("?", "? ... ")
 
-            # Generate audio with ElevenLabs
-            audio_stream = client.generate(
-                text=text,
-                voice=voice_id,  # voice parameter
-                model="eleven_multilingual_v2",
-                voice_settings=self.VOICE_SETTINGS,
-                stream=True,
+            synthesis_input = texttospeech.SynthesisInput(text=text)
+            voice = texttospeech.VoiceSelectionParams(
+                language_code=language_code,
+                name=tts_voice,
+                ssml_gender=texttospeech.SsmlVoiceGender.FEMALE,
             )
-            # Save to file
-            with open(voice_path, "wb") as f:
-                for chunk in audio_stream:
-                    if chunk:
-                        f.write(chunk)
+            audio_config = texttospeech.AudioConfig(
+                audio_encoding=texttospeech.AudioEncoding.MP3,
+                speaking_rate=GOOGLE_TTS_SPEAKING_RATE,
+                pitch=GOOGLE_TTS_PITCH,
+            )
+
+            response = client.synthesize_speech(
+                input=synthesis_input,
+                voice=voice,
+                audio_config=audio_config,
+            )
+
+            with open(voice_path, "wb") as out:
+                out.write(response.audio_content)
 
             return True, voice_path
 
         except Exception as e:
             logger.error(f"Error in text_to_voice: {e}")
             return False, str(e)
+
 
     async def handle_voice_message(self, update: Update, context: CallbackContext):
         """Handle incoming voice messages"""

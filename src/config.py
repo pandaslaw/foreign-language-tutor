@@ -25,10 +25,12 @@ class AppSettings(BaseSettings):
 
     # Voice API settings
     # OPENAI_API_KEY: str
-    ELEVENLABS_API_KEY: str
-
-    # Voice settings
-    ELEVENLABS_VOICE_ID: str = "Leyla"  # Default voice name
+    
+    # Google Cloud TTS settings
+    GOOGLE_CLOUD_PROJECT_ID: str
+    GOOGLE_APPLICATION_CREDENTIALS: str
+    GOOGLE_TTS_LANGUAGE_CODE: str = "tr-TR"  # Default Turkish
+    GOOGLE_TTS_VOICE_NAME: str = "tr-TR-Standard-D"  # Default Turkish female
     VOICE_STYLE: str = "Empathetic"  # Default style for voice generation
 
     # OpenRouter API settings

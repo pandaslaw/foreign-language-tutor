@@ -13,9 +13,9 @@ pyyaml
 pydantic-settings
 pytz
 aiohttp
-elevenlabs
 faster-whisper
 apscheduler
 psutil
-elevenlabs
+google-cloud-texttospeech
 faster_whisper
+google-cloud-texttospeech
