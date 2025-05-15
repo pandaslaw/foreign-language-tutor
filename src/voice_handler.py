@@ -224,9 +224,15 @@ class VoiceHandler:
                 await update.message.reply_text(result)
                 return
 
-            # Detect language of the transcribed text
+            # Detect language of the transcribed text with detailed logging
             input_language = detect_language(result)
-            logger.info(f"Detected language of voice message: {input_language}")
+            logger.info(f"Detected language of voice message: '{result[:50]}...' -> {input_language}")
+            
+            # Store the detected language in user context for future reference
+            if not hasattr(context, 'user_data'):
+                context.user_data = {}
+            context.user_data['detected_language'] = input_language
+            logger.info(f"Stored detected language {input_language} in user context")
             
             # Echo what we understood
             await update.message.reply_text(

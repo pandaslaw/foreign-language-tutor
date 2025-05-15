@@ -3,9 +3,9 @@ Language detection utilities for the language tutor bot.
 """
 
 import logging
-from typing import Optional
+from typing import Optional, Tuple, Dict
 
-from langdetect import detect, LangDetectException
+from langdetect import detect, detect_langs, LangDetectException
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +21,40 @@ LANGUAGE_MAP = {
 DEFAULT_LANGUAGE = "en"
 
 
+def detect_language_with_confidence(text: str) -> Tuple[str, float]:
+    """
+    Detect the language of the given text with confidence score.
+    
+    Args:
+        text: The text to detect language from
+        
+    Returns:
+        Tuple of (language_code, confidence_score)
+    """
+    if not text or len(text.strip()) < 5:
+        logger.warning(f"Text too short for reliable language detection: '{text}'")
+        return DEFAULT_LANGUAGE, 0.0
+        
+    try:
+        # Get all possible languages with probabilities
+        langs = detect_langs(text)
+        if not langs:
+            return DEFAULT_LANGUAGE, 0.0
+            
+        # Get the most probable language
+        top_lang = langs[0]
+        lang_code = top_lang.lang
+        confidence = top_lang.prob
+        
+        logger.info(f"Detected language: {lang_code} with confidence {confidence:.2f}")
+        logger.debug(f"All detected languages: {langs}")
+        
+        return lang_code, confidence
+    except LangDetectException as e:
+        logger.error(f"Language detection with confidence failed: {e}")
+        return DEFAULT_LANGUAGE, 0.0
+
+
 def detect_language(text: str) -> str:
     """
     Detect the language of the given text.
@@ -32,15 +66,29 @@ def detect_language(text: str) -> str:
         A two-letter language code (e.g., 'en', 'tr', 'ru')
         If detection fails, returns the default language code
     """
-    if not text or len(text.strip()) < 5:
+    # Clean the text for better detection
+    clean_text = text.strip()
+    
+    if not clean_text or len(clean_text) < 5:
         logger.warning(f"Text too short for reliable language detection: '{text}'")
         return DEFAULT_LANGUAGE
         
     try:
-        lang_code = detect(text)
-        logger.info(f"Detected language: {lang_code} ({LANGUAGE_MAP.get(lang_code, 'Unknown')})")
+        # Get language with confidence
+        lang_code, confidence = detect_language_with_confidence(text)
         
-        # If detected language is not in our supported languages, use default
+        # Log with more detail
+        lang_name = LANGUAGE_MAP.get(lang_code, 'Unknown')
+        logger.info(f"Final language detection: {lang_code} ({lang_name}) with confidence {confidence:.2f}")
+        
+        # Set minimum confidence threshold for reliable detection
+        MIN_CONFIDENCE = 0.6  # Require at least 60% confidence
+        
+        # If confidence is too low or language not supported, use default
+        if confidence < MIN_CONFIDENCE:
+            logger.warning(f"Low confidence ({confidence:.2f}) for language {lang_code}, using {DEFAULT_LANGUAGE}")
+            return DEFAULT_LANGUAGE
+            
         if lang_code not in LANGUAGE_MAP:
             logger.warning(f"Detected language {lang_code} not supported, using {DEFAULT_LANGUAGE}")
             return DEFAULT_LANGUAGE
